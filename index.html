@@ -1,0 +1,4091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FRAME FORGE · Video Frame Extractor & Sequence Archiver</title>
+  <meta name="description" content="Minimalistic high-precision in-browser video frame extractor. Extracts sequences into ZIP archives with true full-duration probing, 3-stage seek watchdog, and 60FPS test synthesis.">
+
+  <!-- Typography: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- JSZip CDN with graceful offline fallback -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       1. MINIMALISTIC ARCHITECTURAL DESIGN SYSTEM
+       Black & White Theme with Curated Vibrant Accents
+       ========================================================================== */
+    :root {
+      /* Base Architecture */
+      --bg-page: #FAFAFA;
+      --bg-card: #FFFFFF;
+      --bg-card-subtle: #F4F4F5;
+      --bg-muted: #E4E4E7;
+      
+      /* Typography */
+      --text-black: #09090B;
+      --text-secondary: #52525B;
+      --text-muted: #71717A;
+      --text-subtle: #A1A1AA;
+      
+      /* Structural Borders */
+      --border-hairline: #E4E4E7;
+      --border-medium: #D4D4D8;
+      --border-radius-sm: 6px;
+      --border-radius: 10px;
+      --border-radius-lg: 14px;
+      --border-radius-full: 9999px;
+
+      /* Vibrant Accent Colors */
+      --accent-blue: #2563EB;
+      --accent-blue-bg: #EFF6FF;
+      --accent-blue-border: #BFDBFE;
+
+      --accent-emerald: #10B981;
+      --accent-emerald-bg: #ECFDF5;
+      --accent-emerald-border: #A7F3D0;
+
+      --accent-violet: #7C3AED;
+      --accent-violet-bg: #F5F3FF;
+      --accent-violet-border: #DDD6FE;
+
+      --accent-amber: #F59E0B;
+      --accent-amber-bg: #FFFBEB;
+      --accent-amber-border: #FDE68A;
+
+      --accent-rose: #F43F5E;
+      --accent-rose-bg: #FFF1F2;
+      --accent-rose-border: #FECDD3;
+
+      /* Elevations */
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+      --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+      --shadow-elevated: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+
+      /* Fonts */
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    }
+
+    /* ==========================================================================
+       DARK / NIGHT THEME VARIABLES & OVERRIDES
+       ========================================================================== */
+    :root[data-theme="dark"] {
+      /* Dark Base Architecture */
+      --bg-page: #09090B;
+      --bg-card: #121215;
+      --bg-card-subtle: #18181B;
+      --bg-muted: #27272A;
+      
+      /* Dark Typography */
+      --text-black: #F4F4F5;
+      --text-secondary: #A1A1AA;
+      --text-muted: #71717A;
+      --text-subtle: #52525B;
+      
+      /* Dark Structural Borders */
+      --border-hairline: #27272A;
+      --border-medium: #3F3F46;
+
+      /* Dark Vibrant Accents */
+      --accent-blue: #3B82F6;
+      --accent-blue-bg: rgba(37, 99, 235, 0.16);
+      --accent-blue-border: rgba(59, 130, 246, 0.35);
+
+      --accent-emerald: #10B981;
+      --accent-emerald-bg: rgba(16, 185, 129, 0.16);
+      --accent-emerald-border: rgba(16, 185, 129, 0.35);
+
+      --accent-violet: #8B5CF6;
+      --accent-violet-bg: rgba(124, 58, 237, 0.18);
+      --accent-violet-border: rgba(139, 92, 246, 0.35);
+
+      --accent-amber: #F59E0B;
+      --accent-amber-bg: rgba(245, 158, 11, 0.16);
+      --accent-amber-border: rgba(245, 158, 11, 0.35);
+
+      --accent-rose: #F43F5E;
+      --accent-rose-bg: rgba(244, 63, 94, 0.16);
+      --accent-rose-border: rgba(244, 63, 94, 0.35);
+
+      /* Dark Elevations */
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+      --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.6), 0 1px 2px -1px rgba(0, 0, 0, 0.6);
+      --shadow-elevated: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Dark Mode Component Specifics */
+    :root[data-theme="dark"] .brand-logo-icon {
+      background: #F4F4F5;
+      color: #09090B;
+    }
+
+    :root[data-theme="dark"] .card-number {
+      background: #F4F4F5;
+      color: #09090B;
+    }
+
+    :root[data-theme="dark"] .btn-black {
+      background: #F4F4F5;
+      color: #09090B;
+      border-color: #F4F4F5;
+    }
+    :root[data-theme="dark"] .btn-black:hover {
+      background: #FFFFFF;
+      border-color: #FFFFFF;
+    }
+
+    :root[data-theme="dark"] .btn-outline {
+      background: #121215;
+      color: #F4F4F5;
+      border-color: #27272A;
+    }
+    :root[data-theme="dark"] .btn-outline:hover {
+      background: #18181B;
+      border-color: #3F3F46;
+    }
+
+    :root[data-theme="dark"] .pill-btn {
+      background: #121215;
+      color: #A1A1AA;
+      border-color: #27272A;
+    }
+    :root[data-theme="dark"] .pill-btn:hover {
+      background: #18181B;
+      color: #F4F4F5;
+      border-color: #3F3F46;
+    }
+    :root[data-theme="dark"] .pill-btn.active {
+      background: var(--accent-blue);
+      color: #FFFFFF;
+      border-color: var(--accent-blue);
+    }
+
+    :root[data-theme="dark"] .format-btn {
+      background: #121215;
+      border-color: #27272A;
+      color: #F4F4F5;
+    }
+    :root[data-theme="dark"] .format-btn:hover {
+      background: #18181B;
+      border-color: #3F3F46;
+    }
+    :root[data-theme="dark"] .format-btn.active {
+      background: #F4F4F5;
+      color: #09090B;
+      border-color: #F4F4F5;
+    }
+
+    :root[data-theme="dark"] .text-input,
+    :root[data-theme="dark"] .select-dropdown {
+      background: #121215;
+      color: #F4F4F5;
+      border-color: #27272A;
+    }
+    :root[data-theme="dark"] .text-input:focus,
+    :root[data-theme="dark"] .select-dropdown:focus {
+      border-color: #F4F4F5;
+    }
+
+    :root[data-theme="dark"] .duration-lock-box {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    :root[data-theme="dark"] .duration-lock-title {
+      color: #34D399;
+    }
+    :root[data-theme="dark"] .duration-lock-desc {
+      color: #A7F3D0;
+    }
+
+    :root[data-theme="dark"] .frame-card {
+      background: #121215;
+      border-color: #27272A;
+    }
+    :root[data-theme="dark"] .frame-card:hover {
+      border-color: #F4F4F5;
+    }
+    :root[data-theme="dark"] .frame-card-footer {
+      background: #121215;
+      border-color: #27272A;
+    }
+    :root[data-theme="dark"] .frame-dl-btn {
+      color: #A1A1AA;
+    }
+    :root[data-theme="dark"] .frame-dl-btn:hover {
+      background: #18181B;
+      color: #FFFFFF;
+    }
+
+    :root[data-theme="dark"] .toast {
+      background: #18181B;
+      color: #FFFFFF;
+      border: 1px solid #27272A;
+    }
+
+    :root[data-theme="dark"] .range-val-badge {
+      background: #18181B;
+      border-color: #27272A;
+      color: #F4F4F5;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-black);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+
+    header.app-header, .card, .telemetry-card, .resource-card, .btn, .dropzone-box, .video-info-banner, .video-controls-bar, .gallery-toolbar, .metric-cell {
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button, input, select {
+      font-family: inherit;
+      font-size: inherit;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ==========================================================================
+       2. CLEAN MINIMALIST HEADER
+       ========================================================================== */
+    header.app-header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-hairline);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo-icon {
+      width: 34px;
+      height: 34px;
+      background: var(--text-black);
+      color: #FFFFFF;
+      border-radius: var(--border-radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+      color: var(--text-black);
+    }
+
+    .brand-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: var(--border-radius-full);
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-hairline);
+      color: var(--text-secondary);
+    }
+
+    .brand-subtitle {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Minimalist Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--border-radius-sm);
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+      border: 1px solid transparent;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn-black {
+      background: var(--text-black);
+      color: #FFFFFF;
+      border-color: var(--text-black);
+    }
+    .btn-black:hover {
+      background: #27272A;
+      border-color: #27272A;
+    }
+
+    .btn-outline {
+      background: #FFFFFF;
+      color: var(--text-black);
+      border-color: var(--border-hairline);
+    }
+    .btn-outline:hover {
+      background: var(--bg-card-subtle);
+      border-color: var(--border-medium);
+    }
+
+    .btn-violet {
+      background: var(--accent-violet-bg);
+      color: var(--accent-violet);
+      border-color: var(--accent-violet-border);
+    }
+    .btn-violet:hover {
+      background: #EDE9FE;
+    }
+
+    .btn-emerald {
+      background: var(--accent-emerald);
+      color: #FFFFFF;
+      border-color: var(--accent-emerald);
+    }
+    .btn-emerald:hover {
+      background: #059669;
+    }
+
+    .btn-rose {
+      background: var(--accent-rose-bg);
+      color: var(--accent-rose);
+      border-color: var(--accent-rose-border);
+    }
+    .btn-rose:hover {
+      background: #FFE4E6;
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 5px;
+    }
+
+    .btn-lg {
+      padding: 11px 22px;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: var(--border-radius);
+    }
+
+    /* ==========================================================================
+       3. TELEMETRY BANNER (DATA METRIC PILLS)
+       ========================================================================== */
+    .telemetry-bar {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 1024px) {
+      .telemetry-bar {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .telemetry-bar {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .telemetry-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      padding: 12px 16px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .telemetry-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 3px;
+    }
+
+    .telemetry-card.card-blue::before { background: var(--accent-blue); }
+    .telemetry-card.card-emerald::before { background: var(--accent-emerald); }
+    .telemetry-card.card-violet::before { background: var(--accent-violet); }
+    .telemetry-card.card-amber::before { background: var(--accent-amber); }
+
+    .telemetry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .telemetry-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .telemetry-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .card-blue .telemetry-tag { background: var(--accent-blue-bg); color: var(--accent-blue); border: 1px solid var(--accent-blue-border); }
+    .card-emerald .telemetry-tag { background: var(--accent-emerald-bg); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-border); }
+    .card-violet .telemetry-tag { background: var(--accent-violet-bg); color: var(--accent-violet); border: 1px solid var(--accent-violet-border); }
+    .card-amber .telemetry-tag { background: var(--accent-amber-bg); color: #B45309; border: 1px solid var(--accent-amber-border); }
+
+    .telemetry-value {
+      font-family: var(--font-mono);
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--text-black);
+      letter-spacing: -0.02em;
+    }
+
+    .telemetry-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Hardware & System Resource Telemetry Grid */
+    .resource-telemetry-grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 1024px) {
+      .resource-telemetry-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .resource-telemetry-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .resource-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      padding: 10px 14px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .resource-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .resource-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .resource-value {
+      font-family: var(--font-mono);
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--text-black);
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .resource-meter {
+      width: 100%;
+      height: 3px;
+      background: var(--border-hairline);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 2px 0;
+    }
+
+    .resource-meter-fill {
+      height: 100%;
+      background: var(--accent-blue);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .resource-meter-fill.emerald { background: var(--accent-emerald); }
+    .resource-meter-fill.violet { background: var(--accent-violet); }
+    .resource-meter-fill.amber { background: var(--accent-amber); }
+
+    .resource-sub {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Option Estimation Callout Pills */
+    .selector-sub-info {
+      margin-top: 6px;
+      padding: 5px 9px;
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-sm);
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .selector-sub-info strong {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--text-black);
+    }
+    .tag-savings {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: var(--accent-emerald-bg);
+      color: var(--accent-emerald);
+      border: 1px solid var(--accent-emerald-border);
+    }
+
+    /* ==========================================================================
+       4. WORKSPACE CARDS
+       ========================================================================== */
+    .app-main {
+      flex: 1;
+      padding: 18px 0 50px 0;
+    }
+
+    .grid-workspace {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid-workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-number {
+      width: 20px;
+      height: 20px;
+      background: var(--text-black);
+      color: #FFFFFF;
+      border-radius: 50%;
+      font-size: 10.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--text-black);
+    }
+
+    /* Ingestion Area */
+    .dropzone-box {
+      border: 2px dashed var(--border-medium);
+      border-radius: var(--border-radius);
+      padding: 34px 20px;
+      text-align: center;
+      background: var(--bg-card-subtle);
+      transition: all 0.2s ease;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .dropzone-box.dragover {
+      border-color: var(--accent-blue);
+      background: var(--accent-blue-bg);
+    }
+
+    .dropzone-box:hover {
+      border-color: var(--text-black);
+    }
+
+    .dropzone-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 10px;
+      color: var(--text-secondary);
+    }
+
+    .dropzone-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-black);
+      margin-bottom: 3px;
+    }
+
+    .dropzone-hint {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .dropzone-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Video Player Viewport */
+    .video-player-wrapper {
+      display: none;
+    }
+    .video-player-wrapper.visible {
+      display: block;
+    }
+
+    .video-viewport {
+      background: #000000;
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      position: relative;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border-hairline);
+    }
+
+    .video-viewport video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .video-controls-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      margin-top: 8px;
+    }
+
+    .playhead-display {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .scrub-slider {
+      flex: 1;
+      height: 5px;
+      accent-color: var(--text-black);
+      cursor: pointer;
+    }
+
+    /* Active Video Info Banner */
+    .video-info-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-sm);
+      margin-bottom: 10px;
+    }
+
+    .video-info-name {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-black);
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Full-Duration Lock Box */
+    .duration-lock-box {
+      background: var(--accent-emerald-bg);
+      border: 1px solid var(--accent-emerald-border);
+      border-radius: var(--border-radius);
+      padding: 12px 14px;
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .duration-lock-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lock-icon-wrap {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .duration-lock-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #065F46;
+    }
+
+    .duration-lock-desc {
+      font-size: 11px;
+      color: #047857;
+    }
+
+    /* Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-toggle {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--border-medium);
+      transition: .2s;
+      border-radius: 22px;
+    }
+
+    .slider-toggle:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    input:checked + .slider-toggle {
+      background-color: var(--accent-emerald);
+    }
+
+    input:checked + .slider-toggle:before {
+      transform: translateX(18px);
+    }
+
+    /* Custom Range Controls */
+    .custom-range-panel {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      background: var(--bg-card-subtle);
+      display: none;
+    }
+
+    .custom-range-panel.visible {
+      display: block;
+    }
+
+    .range-inputs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .input-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .input-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-sm);
+      background: #FFFFFF;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text-black);
+    }
+
+    .text-input:focus {
+      outline: none;
+      border-color: var(--text-black);
+    }
+
+    /* Configuration Panel Controls */
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    .config-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* 5 Clean FPS Presets (10, 24, 30, 45, 60) */
+    .pills-group-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .pill-btn {
+      padding: 8px 4px;
+      border-radius: var(--border-radius-sm);
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 700;
+      border: 1px solid var(--border-hairline);
+      background: #FFFFFF;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+      user-select: none;
+    }
+
+    .pill-btn:hover {
+      background: var(--bg-card-subtle);
+      border-color: var(--border-medium);
+      color: var(--text-black);
+    }
+
+    .pill-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #FFFFFF;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
+    }
+
+    /* Format & Scaling */
+    .options-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .format-btn {
+      padding: 8px 6px;
+      text-align: center;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-sm);
+      background: #FFFFFF;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .format-btn:hover {
+      border-color: var(--border-medium);
+      background: var(--bg-card-subtle);
+    }
+
+    .format-btn.active {
+      border-color: var(--text-black);
+      background: var(--text-black);
+      color: #FFFFFF;
+    }
+
+    .format-name {
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    .format-desc {
+      font-size: 10px;
+      opacity: 0.75;
+    }
+
+    /* Quality Slider */
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .range-bar {
+      flex: 1;
+      accent-color: var(--text-black);
+      height: 5px;
+      cursor: pointer;
+    }
+
+    .range-val-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-hairline);
+      border-radius: 4px;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    /* Resolution Presets */
+    .select-dropdown {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-sm);
+      background: #FFFFFF;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-black);
+      cursor: pointer;
+    }
+
+    .select-dropdown:focus {
+      outline: none;
+      border-color: var(--text-black);
+    }
+
+    /* ZIP Settings Box */
+    .zip-settings-box {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .checkbox-row input {
+      accent-color: var(--text-black);
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+
+    /* Action Trigger Bar */
+    .action-panel {
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .action-panel-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .action-panel-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ==========================================================================
+       5. EXTRACTION MONITOR & TELEMETRY
+       ========================================================================== */
+    .extraction-monitor {
+      margin-top: 18px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-lg);
+      padding: 18px;
+      box-shadow: var(--shadow-card);
+      display: none;
+    }
+
+    .extraction-monitor.visible {
+      display: block;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      background: var(--bg-card-subtle);
+      border-radius: var(--border-radius-full);
+      overflow: hidden;
+      margin: 12px 0 16px 0;
+      border: 1px solid var(--border-hairline);
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10B981, #059669);
+      transition: width 0.1s linear;
+      position: relative;
+    }
+
+    .monitor-telemetry-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+
+    @media (max-width: 768px) {
+      .monitor-telemetry-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .mini-preview-box {
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      background: #000000;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .mini-preview-box canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .mini-preview-badge {
+      position: absolute;
+      bottom: 5px;
+      left: 5px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #FFFFFF;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    .monitor-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 640px) {
+      .monitor-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .metric-cell {
+      padding: 8px 10px;
+      background: var(--bg-card-subtle);
+      border-radius: var(--border-radius-sm);
+      border: 1px solid var(--border-hairline);
+    }
+
+    .metric-cell-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .metric-cell-val {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-black);
+      margin-top: 2px;
+    }
+
+    /* ==========================================================================
+       6. VIRTUALIZED GALLERY
+       ========================================================================== */
+    .gallery-section {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .gallery-section.visible {
+      display: block;
+    }
+
+    .gallery-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 18px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius-lg);
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .gallery-toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .gallery-count-badge {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: var(--border-radius-full);
+      background: var(--accent-violet-bg);
+      color: var(--accent-violet);
+      border: 1px solid var(--accent-violet-border);
+    }
+
+    .gallery-pagination {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .page-info {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      padding: 0 4px;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+    }
+
+    .frame-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .frame-card:hover {
+      border-color: var(--text-black);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card);
+    }
+
+    .frame-card.selected {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+    }
+
+    .frame-thumb-wrap {
+      aspect-ratio: 16 / 9;
+      background: #000000;
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .frame-thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.2s ease;
+    }
+
+    .frame-thumb-wrap:hover img {
+      transform: scale(1.05);
+    }
+
+    .frame-select-chk {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent-blue);
+      cursor: pointer;
+      z-index: 2;
+    }
+
+    .frame-index-tag {
+      position: absolute;
+      bottom: 5px;
+      left: 5px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #FFFFFF;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    .frame-time-tag {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      background: rgba(37, 99, 235, 0.85);
+      color: #FFFFFF;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    .frame-card-footer {
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border-hairline);
+      background: var(--bg-card);
+    }
+
+    .frame-size-label {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .frame-dl-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 3px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .frame-dl-btn:hover {
+      background: var(--bg-card-subtle);
+      color: var(--text-black);
+    }
+
+    /* ==========================================================================
+       7. FLIPBOOK INSPECTOR LIGHTBOX
+       ========================================================================== */
+    dialog.lightbox-modal {
+      border: none;
+      background: transparent;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    dialog.lightbox-modal::backdrop {
+      background: rgba(9, 9, 11, 0.9);
+      backdrop-filter: blur(8px);
+    }
+
+    .lightbox-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      color: #FFFFFF;
+      padding: 16px 20px;
+    }
+
+    .lightbox-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 44px;
+      flex-shrink: 0;
+    }
+
+    .lightbox-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lightbox-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: var(--border-radius-full);
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .lightbox-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+
+    .lightbox-stage img {
+      max-width: 95%;
+      max-height: 90%;
+      object-fit: contain;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      border-radius: var(--border-radius);
+    }
+
+    .lightbox-controls-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(24, 24, 27, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--border-radius-lg);
+      padding: 12px 18px;
+      backdrop-filter: blur(12px);
+      flex-shrink: 0;
+      max-width: 820px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .lightbox-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .lightbox-scrub {
+      flex: 1;
+      accent-color: var(--accent-emerald);
+      height: 5px;
+      cursor: pointer;
+    }
+
+    .lightbox-buttons-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .flipbook-nav-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--text-black);
+      color: #FFFFFF;
+      padding: 9px 14px;
+      border-radius: var(--border-radius-sm);
+      font-size: 12.5px;
+      font-weight: 600;
+      box-shadow: var(--shadow-elevated);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      pointer-events: auto;
+      animation: toast-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes toast-in {
+      from { transform: translateY(10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       CLEAN HEADER
+       ========================================================================== -->
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand-group">
+        <div class="brand-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+            <line x1="7" y1="2" x2="7" y2="22"></line>
+            <line x1="17" y1="2" x2="17" y2="22"></line>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <line x1="2" y1="7" x2="7" y2="7"></line>
+            <line x1="2" y1="17" x2="7" y2="17"></line>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title-wrap">
+            <span class="brand-title">FRAME FORGE</span>
+          </div>
+          <span class="brand-subtitle">High-Precision In-Browser Video Frame Extractor</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnThemeToggle" class="btn btn-outline btn-sm" title="Toggle Night Mode" aria-label="Toggle Night Mode">
+          <svg id="iconSun" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg id="iconMoon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span id="lblThemeText">Night</span>
+        </button>
+        <button id="btnQuickSynth" class="btn btn-violet btn-sm" title="Synthesize a 60FPS test video in browser memory">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          Synthesize 60FPS Clip
+        </button>
+        <button id="btnHeaderReset" class="btn btn-outline btn-sm" title="Clear all frames and upload a new video">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+            <path d="M21 3v5h-5"></path>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+            <path d="M3 21v-5h5"></path>
+          </svg>
+          Reset / New Video
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       DATA TELEMETRY BANNER
+       ========================================================================== -->
+  <section class="container">
+    <div class="telemetry-bar">
+      <!-- Card 1: Electric Blue (Detected Duration) -->
+      <div class="telemetry-card card-blue">
+        <div class="telemetry-header">
+          <span class="telemetry-label">Video Duration</span>
+          <span id="badgeDurationProbed" class="telemetry-tag">Ready</span>
+        </div>
+        <div id="statDetectedDuration" class="telemetry-value">00:00.000</div>
+        <div class="telemetry-sub">
+          <span id="statVideoMeta">No video loaded</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Emerald (Target Range) -->
+      <div class="telemetry-card card-emerald">
+        <div class="telemetry-header">
+          <span class="telemetry-label">Extraction Range</span>
+          <span id="badgeLockState" class="telemetry-tag">Full-Lock ON</span>
+        </div>
+        <div id="statTargetRange" class="telemetry-value">0.00s → 0.00s</div>
+        <div class="telemetry-sub">
+          <span id="statRangeSpan">Window: 0.00s</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Violet (Total Frames) -->
+      <div class="telemetry-card card-violet">
+        <div class="telemetry-header">
+          <span class="telemetry-label">Frames To Extract</span>
+          <span id="badgeSamplingMode" class="telemetry-tag">30 FPS</span>
+        </div>
+        <div id="statFramesCount" class="telemetry-value">0 Frames</div>
+        <div class="telemetry-sub">
+          <span id="statExtractionRate">Calculated sequence size</span>
+        </div>
+      </div>
+
+      <!-- Card 4: Amber (Watchdog & RAM) -->
+      <div class="telemetry-card card-amber">
+        <div class="telemetry-header">
+          <span class="telemetry-label">Est. RAM & Split</span>
+          <span id="badgeWatchdogCount" class="telemetry-tag">Watchdog 0</span>
+        </div>
+        <div id="statEstMemory" class="telemetry-value">~0 MB</div>
+        <div class="telemetry-sub">
+          <span id="statSplitParts">Auto-Split: 0 ZIP Parts</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         DETAILED LIVE HARDWARE & SYSTEM RESOURCE MONITOR (RAM, CPU, DISK, GPU)
+         ====================================================================== -->
+    <div class="resource-telemetry-grid">
+      <!-- RAM Resource Card -->
+      <div class="resource-card">
+        <div class="resource-header">
+          <span class="resource-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 19v-3M10 19v-3M14 19v-3M18 19v-3M6 5v3M10 5v3M14 5v3M18 5v3M2 8h20v8H2z"></path>
+            </svg>
+            Live RAM Usage
+          </span>
+          <span id="resBadgeRamHeap" class="telemetry-tag" style="background: var(--accent-blue-bg); color: var(--accent-blue); border: 1px solid var(--accent-blue-border);">
+            Heap 0%
+          </span>
+        </div>
+        <div id="resValRamHeap" class="resource-value">-- MB / -- GB</div>
+        <div class="resource-meter">
+          <div id="resMeterRamFill" class="resource-meter-fill" style="width: 2%;"></div>
+        </div>
+        <div class="resource-sub">
+          <span id="resSubRamDetail">Frame Store: 0 B in RAM · Auto-Split Active</span>
+        </div>
+      </div>
+
+      <!-- CPU & Threading Engine Card -->
+      <div class="resource-card">
+        <div class="resource-header">
+          <span class="resource-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+              <rect x="9" y="9" width="6" height="6"></rect>
+              <line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line>
+              <line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line>
+              <line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line>
+              <line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line>
+            </svg>
+            CPU & Concurrency
+          </span>
+          <span id="resBadgeCpuCores" class="telemetry-tag" style="background: var(--accent-emerald-bg); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-border);">
+            -- Cores
+          </span>
+        </div>
+        <div id="resValCpuSpeed" class="resource-value">60.0 FPS Loop</div>
+        <div class="resource-meter">
+          <div id="resMeterCpuFill" class="resource-meter-fill emerald" style="width: 95%;"></div>
+        </div>
+        <div class="resource-sub">
+          <span id="resSubCpuDetail">Latency: 16.6ms · Engine: Idle</span>
+        </div>
+      </div>
+
+      <!-- Disk & Storage Quota Card -->
+      <div class="resource-card">
+        <div class="resource-header">
+          <span class="resource-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+            </svg>
+            Disk & Storage
+          </span>
+          <span id="resBadgeDiskQuota" class="telemetry-tag" style="background: var(--accent-violet-bg); color: var(--accent-violet); border: 1px solid var(--accent-violet-border);">
+            Quota Ready
+          </span>
+        </div>
+        <div id="resValDiskEst" class="resource-value">~0 MB Needed</div>
+        <div class="resource-meter">
+          <div id="resMeterDiskFill" class="resource-meter-fill violet" style="width: 1%;"></div>
+        </div>
+        <div class="resource-sub">
+          <span id="resSubDiskDetail">Browser Storage Quota: Checking...</span>
+        </div>
+      </div>
+
+      <!-- GPU Acceleration Card -->
+      <div class="resource-card">
+        <div class="resource-header">
+          <span class="resource-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            GPU Acceleration
+          </span>
+          <span id="resBadgeGpuStatus" class="telemetry-tag" style="background: var(--accent-amber-bg); color: #B45309; border: 1px solid var(--accent-amber-border);">
+            Hardware Blit
+          </span>
+        </div>
+        <div id="resValGpuRenderer" class="resource-value">Detecting GPU...</div>
+        <div class="resource-meter">
+          <div id="resMeterGpuFill" class="resource-meter-fill amber" style="width: 100%;"></div>
+        </div>
+        <div class="resource-sub">
+          <span id="resSubGpuDetail">Offscreen Canvas 2D: Hardware Accelerated</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       MAIN WORKSPACE
+       ========================================================================== -->
+  <main class="container app-main">
+    <div class="grid-workspace">
+
+      <!-- ======================================================================
+           LEFT: VIDEO SOURCE & TRIMMING
+           ====================================================================== -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-number">1</span>
+            <span class="card-title">Video Source & Duration</span>
+          </div>
+          <button id="btnReprobeDuration" class="btn btn-outline btn-sm" title="Re-probe video duration via 1e101 seek">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            Re-probe
+          </button>
+        </div>
+
+        <!-- Ingestion Dropzone -->
+        <div id="dropzone" class="dropzone-box">
+          <input type="file" id="fileInput" accept="video/*" class="hidden">
+          <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <div class="dropzone-title">Drop video here or click to browse</div>
+          <div class="dropzone-hint">Supports MP4, WebM, MKV, MOV, AVI · 100% in-browser, no upload</div>
+          <div class="dropzone-actions">
+            <button type="button" class="btn btn-black btn-sm" onclick="document.getElementById('fileInput').click()">
+              Choose Video File
+            </button>
+            <span style="font-size: 11px; color: var(--text-muted);">or</span>
+            <button type="button" id="btnDropzoneSynth" class="btn btn-violet btn-sm">
+              Synthesize 60FPS Clip
+            </button>
+          </div>
+        </div>
+
+        <!-- Video Player Wrapper (Visible once video is loaded) -->
+        <div id="videoPlayerWrapper" class="video-player-wrapper">
+          <div class="video-info-banner">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="video-info-name" id="lblVideoFileName">video.mp4</span>
+              <span id="lblVideoResolution" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">1920×1080</span>
+            </div>
+            <button id="btnChangeVideo" class="btn btn-outline btn-sm" style="padding: 3px 8px;" onclick="document.getElementById('fileInput').click()">
+              Change Video
+            </button>
+          </div>
+
+          <div class="video-viewport">
+            <video id="sourceVideo" preload="auto" playsinline></video>
+          </div>
+
+          <div class="video-controls-bar">
+            <button id="btnPlayPause" class="btn btn-outline btn-sm" title="Play/Pause Preview">
+              <svg id="iconPlay" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <svg id="iconPause" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" class="hidden">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+            </button>
+            <input type="range" id="videoScrubber" class="scrub-slider" min="0" max="100" value="0" step="0.01">
+            <div id="playheadTime" class="playhead-display">00:00.000 / 00:00.000</div>
+          </div>
+        </div>
+
+        <!-- Full-Duration Lock Toggle -->
+        <div class="duration-lock-box">
+          <div class="duration-lock-left">
+            <div class="lock-icon-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="duration-lock-title">Extract Full Video Duration (0.00s → End)</div>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="chkFullDurationLock" checked>
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+
+        <!-- Custom Range Adjustment -->
+        <div id="customRangePanel" class="custom-range-panel">
+          <div style="font-size: 11.5px; font-weight: 700; color: var(--text-black); margin-bottom: 6px;">
+            Precision Custom Range Trimming:
+          </div>
+          <div class="range-inputs-grid">
+            <div class="input-field-group">
+              <label class="input-label">Start Time (Seconds)</label>
+              <div class="input-row">
+                <input type="number" id="numStartTime" class="text-input" value="0.000" step="0.01" min="0">
+                <button id="btnSetStartCurrent" class="btn btn-outline btn-sm" title="Set to current playhead">Current</button>
+              </div>
+            </div>
+            <div class="input-field-group">
+              <label class="input-label">End Time (Seconds)</label>
+              <div class="input-row">
+                <input type="number" id="numEndTime" class="text-input" value="0.000" step="0.01" min="0">
+                <button id="btnSetEndCurrent" class="btn btn-outline btn-sm" title="Set to current playhead">Current</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================================
+           RIGHT: SAMPLING (5 OPTIONS), FORMAT & SCALING
+           ====================================================================== -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-number">2</span>
+            <span class="card-title">Sampling & Output Settings</span>
+          </div>
+          <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Offscreen Engine</span>
+        </div>
+
+        <div class="config-grid">
+
+          <!-- 1. The 5 Requested FPS Options: 10, 24, 30, 45, 60 -->
+          <div>
+            <div class="config-section-title">
+              <span>Sampling Rate</span>
+              <span id="lblSamplingDetail" style="color: var(--accent-blue); font-family: var(--font-mono); font-weight: 700;">30 FPS</span>
+            </div>
+            <div class="pills-group-5" id="fpsPillsContainer">
+              <button type="button" class="pill-btn" data-fps="10">10 FPS</button>
+              <button type="button" class="pill-btn" data-fps="24">24 FPS</button>
+              <button type="button" class="pill-btn active" data-fps="30">30 FPS</button>
+              <button type="button" class="pill-btn" data-fps="45">45 FPS</button>
+              <button type="button" class="pill-btn" data-fps="60">60 FPS</button>
+            </div>
+            <div id="lblFpsEstStats" class="selector-sub-info">
+              <span>Sequence: <strong id="lblFpsEstFrames">0 Frames</strong></span>
+              <span>·</span>
+              <span>Est. Total Size: <strong id="lblFpsEstSize">~0 MB</strong></span>
+              <span>·</span>
+              <span id="lblFpsStepTime">0.033s step</span>
+            </div>
+          </div>
+
+          <!-- 2. Format & Quality Slider -->
+          <div>
+            <div class="config-section-title">
+              <span>Image Format & Quality</span>
+              <span id="lblQualityBadge" style="font-family: var(--font-mono); font-weight: 700;">Lossless 100%</span>
+            </div>
+            <div class="options-row">
+              <button type="button" class="format-btn active" data-format="png">
+                <div class="format-name">PNG</div>
+                <div class="format-desc">Lossless RGB</div>
+              </button>
+              <button type="button" class="format-btn" data-format="jpeg">
+                <div class="format-name">JPEG</div>
+                <div class="format-desc">Compressed</div>
+              </button>
+              <button type="button" class="format-btn" data-format="webp">
+                <div class="format-name">WebP</div>
+                <div class="format-desc">Modern Fast</div>
+              </button>
+            </div>
+
+            <div id="qualitySliderRow" style="margin-top: 8px; opacity: 0.45; pointer-events: none;">
+              <div class="slider-container">
+                <span style="font-size: 10.5px; font-weight: 600; color: var(--text-muted);">QUALITY:</span>
+                <input type="range" id="rangeQuality" class="range-bar" min="0.1" max="1.0" step="0.05" value="0.92">
+                <span id="valQualityNum" class="range-val-badge">0.92</span>
+              </div>
+            </div>
+
+            <div id="lblFormatEstStats" class="selector-sub-info">
+              <span>Single Frame: <strong id="lblPerFrameEstSize">~0 KB</strong></span>
+              <span>·</span>
+              <span>Est. Total: <strong id="lblTotalEstDownload">~0 MB</strong></span>
+              <span>·</span>
+              <span id="lblFormatSavingsTag" class="tag-savings">Lossless 100%</span>
+            </div>
+          </div>
+
+          <!-- 3. Resolution Scaling -->
+          <div>
+            <div class="config-section-title">
+              <span>Resolution Scaling</span>
+              <span id="lblScaledDimensions" style="font-family: var(--font-mono); color: var(--text-secondary);">Original 100%</span>
+            </div>
+            <select id="selResolutionScale" class="select-dropdown">
+              <option value="original" selected>Original Resolution (100%)</option>
+              <option value="2160p">4K UHD (3840 × 2160)</option>
+              <option value="1080p">Full HD 1080p (1920 × 1080)</option>
+              <option value="720p">HD 720p (1280 × 720)</option>
+              <option value="480p">SD 480p (854 × 480)</option>
+              <option value="custom">Custom Width × Height...</option>
+            </select>
+
+            <div id="customResWrap" style="margin-top: 6px; display: none;">
+              <div class="input-row">
+                <input type="number" id="numCustomWidth" class="text-input" placeholder="Width (px)" min="64" max="7680">
+                <span style="font-size: 12px; color: var(--text-muted);">×</span>
+                <input type="number" id="numCustomHeight" class="text-input" placeholder="Height (px)" min="64" max="4320">
+              </div>
+            </div>
+
+            <div id="lblResEstStats" class="selector-sub-info">
+              <span>Target: <strong id="lblResTargetDims">1920 × 1080 (2.07 MP)</strong></span>
+              <span>·</span>
+              <span>Canvas Buffer: <strong id="lblResCanvasBuffer">8.29 MB / frame</strong></span>
+            </div>
+          </div>
+
+          <!-- 4. ZIP Archiving & Sequence Naming -->
+          <div class="zip-settings-box">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-black); text-transform: uppercase; letter-spacing: 0.04em;">
+                Sequence Naming & ZIP Archiver
+              </span>
+              <span class="telemetry-tag" style="background: var(--accent-amber-bg); color: #B45309; border: 1px solid var(--accent-amber-border);">
+                Fast Store Mode
+              </span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+              <div class="input-field-group">
+                <label class="input-label" for="txtCustomName">Custom Name / Prefix</label>
+                <input type="text" id="txtCustomName" class="text-input" value="frame" placeholder="e.g. frame, scene_01, shot" style="padding: 5px 8px; font-size: 12px; font-family: var(--font-mono);">
+              </div>
+
+              <div class="input-field-group">
+                <label class="input-label" for="selNamingPattern">Naming Pattern</label>
+                <select id="selNamingPattern" class="select-dropdown" style="padding: 5px 8px;">
+                  <option value="{name}_{index:5}" selected>{name}_00001.ext (5 Digits)</option>
+                  <option value="{name}_{index:6}">{name}_000001.ext (6 Digits)</option>
+                  <option value="{name}_{index:4}">{name}_0001.ext (4 Digits)</option>
+                  <option value="{name}_{index}">{name}_1.ext (No zero-pad)</option>
+                  <option value="{name}_{timecode}">{name}_00-01-250.ext (Timecode)</option>
+                  <option value="{videoname}_{index:5}">{videoname}_00001.ext (Video Name)</option>
+                  <option value="{videoname}_{name}_{index:5}">{videoname}_{name}_00001.ext</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+              <div class="input-field-group">
+                <label class="input-label" for="selZipSplitSize">Auto-Split Batch</label>
+                <select id="selZipSplitSize" class="select-dropdown" style="padding: 5px 8px;">
+                  <option value="250">Every 250 Frames</option>
+                  <option value="500" selected>Every 500 Frames (Safe)</option>
+                  <option value="1000">Every 1000 Frames</option>
+                  <option value="999999">Single ZIP</option>
+                </select>
+              </div>
+
+              <div class="input-field-group">
+                <label class="input-label">Filename Preview</label>
+                <div id="lblFilenamePreview" style="padding: 5px 8px; border: 1px solid var(--border-hairline); border-radius: var(--border-radius-sm); background: var(--bg-card-subtle); font-family: var(--font-mono); font-size: 11.5px; color: var(--accent-blue); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 29px; display: flex; align-items: center;">
+                  frame_00001.png
+                </div>
+              </div>
+            </div>
+
+            <label class="checkbox-row" style="margin-top: 6px;">
+              <input type="checkbox" id="chkIncludeManifest" checked>
+              Include manifest.json sequence telemetry
+            </label>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================
+         PRIMARY ACTION TRIGGER BAR
+         ======================================================================== -->
+    <div class="action-panel">
+      <div class="action-panel-left">
+        <button id="btnStartExtraction" class="btn btn-black btn-lg" disabled>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span id="lblStartBtn">START EXTRACTION</span>
+        </button>
+        <button id="btnCancelExtraction" class="btn btn-rose btn-lg hidden">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="6" y="6" width="12" height="12"></rect>
+          </svg>
+          Cancel Extraction
+        </button>
+        <button id="btnResetWorkflow" class="btn btn-outline btn-lg" title="Reset everything and load another video">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+            <path d="M21 3v5h-5"></path>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+            <path d="M3 21v-5h5"></path>
+          </svg>
+          Reset All
+        </button>
+      </div>
+
+      <div class="action-panel-right">
+        <span id="actionHelpText" style="font-size: 12.5px; color: var(--text-muted);">
+          Drop or choose a video file to begin
+        </span>
+      </div>
+    </div>
+
+    <!-- ========================================================================
+         REAL-TIME EXTRACTION MONITOR
+         ======================================================================== -->
+    <div id="extractionMonitor" class="extraction-monitor">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald);"></div>
+          <span style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+            Extracting Frame Sequence...
+          </span>
+        </div>
+        <div id="monitorPercentText" style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--accent-emerald);">
+          0.0%
+        </div>
+      </div>
+
+      <div class="progress-track">
+        <div id="extractionProgressFill" class="progress-fill"></div>
+      </div>
+
+      <div class="monitor-telemetry-grid">
+        <div class="mini-preview-box">
+          <canvas id="offscreenCanvas"></canvas>
+          <div class="mini-preview-badge">Live Decoder Viewport</div>
+        </div>
+
+        <div class="monitor-metrics-grid">
+          <div class="metric-cell">
+            <div class="metric-cell-label">Current Frame</div>
+            <div id="metricCurrentFrame" class="metric-cell-val">0 / 0</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-cell-label">Playhead Timecode</div>
+            <div id="metricCurrentTimecode" class="metric-cell-val">00:00.000</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-cell-label">Decoding Velocity</div>
+            <div id="metricDecodingFps" class="metric-cell-val">0.0 FPS</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-cell-label">Elapsed Time</div>
+            <div id="metricElapsedTime" class="metric-cell-val">00:00.0</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-cell-label">Estimated Remaining</div>
+            <div id="metricEtaTime" class="metric-cell-val">--:--</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-cell-label">Watchdog Retries</div>
+            <div id="metricWatchdogNudges" class="metric-cell-val" style="color: var(--accent-amber);">0 Nudges</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================
+         VIRTUALIZED OBJECTURL GALLERY
+         ======================================================================== -->
+    <div id="gallerySection" class="gallery-section">
+      <div class="gallery-toolbar">
+        <div class="gallery-toolbar-left">
+          <span style="font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em;">
+            Extracted Frames
+          </span>
+          <span id="galleryCountBadge" class="gallery-count-badge">0 Frames</span>
+          <span id="galleryRamUsage" style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted);">
+            RAM: 0 MB
+          </span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <button id="btnSelectAll" class="btn btn-outline btn-sm">Select All</button>
+          <button id="btnDeselectAll" class="btn btn-outline btn-sm">Deselect All</button>
+
+          <div class="gallery-pagination">
+            <button id="btnPrevPage" class="btn btn-outline btn-sm" disabled>&larr; Prev</button>
+            <span id="pageIndicator" class="page-info">Page 1 of 1</span>
+            <button id="btnNextPage" class="btn btn-outline btn-sm" disabled>Next &rarr;</button>
+          </div>
+
+          <button id="btnDownloadZip" class="btn btn-emerald btn-sm">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span id="lblDownloadZip">Download All as ZIP</span>
+          </button>
+          <button id="btnClearFrames" class="btn btn-rose btn-sm" title="Clear frames from RAM">
+            Clear Frames
+          </button>
+        </div>
+      </div>
+
+      <div id="galleryGrid" class="gallery-grid"></div>
+    </div>
+  </main>
+
+  <!-- ==========================================================================
+       FLIPBOOK INSPECTOR LIGHTBOX
+       ========================================================================== -->
+  <dialog id="lightboxModal" class="lightbox-modal">
+    <div class="lightbox-container">
+      <div class="lightbox-header">
+        <div class="lightbox-title-group">
+          <span style="font-size: 15px; font-weight: 800; letter-spacing: -0.01em;">FLIPBOOK INSPECTOR</span>
+          <span id="lightboxFrameIndexTag" class="lightbox-badge">Frame #00001</span>
+          <span id="lightboxTimecodeTag" class="lightbox-badge" style="color: var(--accent-blue);">00:00.000</span>
+          <span id="lightboxResolutionTag" class="lightbox-badge" style="color: var(--accent-emerald);">1920 × 1080</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="btnLightboxDownloadSingle" class="btn btn-outline btn-sm" style="color:#000;">
+            Download Frame
+          </button>
+          <button id="btnCloseLightbox" class="btn btn-outline btn-sm" style="color:#000;">
+            ✕ Close (Esc)
+          </button>
+        </div>
+      </div>
+
+      <div class="lightbox-stage">
+        <img id="lightboxImage" src="" alt="Frame Inspector Preview">
+      </div>
+
+      <div class="lightbox-controls-bar">
+        <div class="lightbox-slider-row">
+          <span id="lightboxCurFrameNum" style="font-family: var(--font-mono); font-size: 11.5px; min-width: 40px;">1</span>
+          <input type="range" id="lightboxScrubber" class="lightbox-scrub" min="0" max="0" value="0">
+          <span id="lightboxTotalFramesNum" style="font-family: var(--font-mono); font-size: 11.5px; min-width: 40px; text-align: right;">1</span>
+        </div>
+
+        <div class="lightbox-buttons-row">
+          <div class="flipbook-nav-group">
+            <button id="btnFlipbookFirst" class="btn btn-outline btn-sm" title="First Frame (|<<)">&laquo;</button>
+            <button id="btnFlipbookPrev" class="btn btn-outline btn-sm" title="Step Back (&larr;)">&lsaquo;</button>
+            <button id="btnFlipbookPlay" class="btn btn-emerald btn-sm" style="min-width: 76px;">
+              Play
+            </button>
+            <button id="btnFlipbookNext" class="btn btn-outline btn-sm" title="Step Forward (&rarr;)">&rsaquo;</button>
+            <button id="btnFlipbookLast" class="btn btn-outline btn-sm" title="Last Frame (>>|)" style="margin-right: 10px;">&raquo;</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted);">
+            <span>PLAYBACK FPS:</span>
+            <button type="button" class="pill-btn btn-sm" data-flip-fps="24" style="padding: 2px 7px;">24</button>
+            <button type="button" class="pill-btn btn-sm active" data-flip-fps="30" style="padding: 2px 7px;">30</button>
+            <button type="button" class="pill-btn btn-sm" data-flip-fps="60" style="padding: 2px 7px;">60</button>
+          </div>
+
+          <div style="font-size: 11px; opacity: 0.65;">
+            Keys: Space (Play/Pause) · &larr; / &rarr; (Step) · Esc (Exit)
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Hidden Offscreen Video Decoder -->
+  <video id="offscreenVideo" muted playsinline preload="auto" class="hidden"></video>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ==========================================================================
+       CORE APPLICATION LOGIC
+       ========================================================================== -->
+  <script>
+    (function() {
+      'use strict';
+
+      // --- Application State ---
+      const state = {
+        videoFile: null,
+        videoUrl: null,
+        videoDuration: 0,
+        videoWidth: 0,
+        videoHeight: 0,
+        videoName: 'video',
+        isSynthetic: false,
+        
+        // Duration Lock & Range
+        fullDurationLock: true,
+        startTime: 0,
+        endTime: 0,
+        
+        // Sampling (Exactly 5 Options: 10, 24, 30, 45, 60)
+        fps: 30,
+        
+        // Format & Quality
+        format: 'png',
+        quality: 0.92,
+        
+        // Resolution Scaling
+        scaleMode: 'original',
+        customWidth: 1920,
+        customHeight: 1080,
+        
+        // ZIP Packaging & Sequence Naming
+        splitBatchSize: 500,
+        customNamePrefix: 'frame',
+        namingPattern: '{name}_{index:5}',
+        includeManifest: true,
+        
+        // Extraction Execution
+        isExtracting: false,
+        cancelRequested: false,
+        watchdogNudges: 0,
+        
+        // Virtualized Frame Store
+        frames: [],
+        activeObjectURLs: [],
+        currentPage: 1,
+        pageSize: 60,
+        selectedFrameIds: new Set(),
+        
+        // Flipbook Lightbox
+        lightboxIndex: 0,
+        lightboxPlaying: false,
+        lightboxFps: 30,
+        lightboxTimer: null
+      };
+
+      // --- DOM Elements ---
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('fileInput');
+      const videoPlayerWrapper = document.getElementById('videoPlayerWrapper');
+      const sourceVideo = document.getElementById('sourceVideo');
+      const offscreenVideo = document.getElementById('offscreenVideo');
+      const offscreenCanvas = document.getElementById('offscreenCanvas');
+      const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+      
+      const lblVideoFileName = document.getElementById('lblVideoFileName');
+      const lblVideoResolution = document.getElementById('lblVideoResolution');
+      const btnQuickSynth = document.getElementById('btnQuickSynth');
+      const btnDropzoneSynth = document.getElementById('btnDropzoneSynth');
+      const btnHeaderReset = document.getElementById('btnHeaderReset');
+      const btnResetWorkflow = document.getElementById('btnResetWorkflow');
+      const btnReprobeDuration = document.getElementById('btnReprobeDuration');
+      
+      const chkFullDurationLock = document.getElementById('chkFullDurationLock');
+      const customRangePanel = document.getElementById('customRangePanel');
+      const numStartTime = document.getElementById('numStartTime');
+      const numEndTime = document.getElementById('numEndTime');
+      const btnSetStartCurrent = document.getElementById('btnSetStartCurrent');
+      const btnSetEndCurrent = document.getElementById('btnSetEndCurrent');
+      
+      const videoScrubber = document.getElementById('videoScrubber');
+      const playheadTime = document.getElementById('playheadTime');
+      const btnPlayPause = document.getElementById('btnPlayPause');
+      const iconPlay = document.getElementById('iconPlay');
+      const iconPause = document.getElementById('iconPause');
+
+      const fpsPillsContainer = document.getElementById('fpsPillsContainer');
+      const lblSamplingDetail = document.getElementById('lblSamplingDetail');
+      
+      const formatBtns = document.querySelectorAll('.format-btn');
+      const qualitySliderRow = document.getElementById('qualitySliderRow');
+      const rangeQuality = document.getElementById('rangeQuality');
+      const valQualityNum = document.getElementById('valQualityNum');
+      const lblQualityBadge = document.getElementById('lblQualityBadge');
+
+      const selResolutionScale = document.getElementById('selResolutionScale');
+      const customResWrap = document.getElementById('customResWrap');
+      const numCustomWidth = document.getElementById('numCustomWidth');
+      const numCustomHeight = document.getElementById('numCustomHeight');
+      const lblScaledDimensions = document.getElementById('lblScaledDimensions');
+
+      const selZipSplitSize = document.getElementById('selZipSplitSize');
+      const txtCustomName = document.getElementById('txtCustomName');
+      const selNamingPattern = document.getElementById('selNamingPattern');
+      const lblFilenamePreview = document.getElementById('lblFilenamePreview');
+      const chkIncludeManifest = document.getElementById('chkIncludeManifest');
+
+      const btnStartExtraction = document.getElementById('btnStartExtraction');
+      const btnCancelExtraction = document.getElementById('btnCancelExtraction');
+      const lblStartBtn = document.getElementById('lblStartBtn');
+      const actionHelpText = document.getElementById('actionHelpText');
+
+      // Telemetry Banner Elements
+      const statDetectedDuration = document.getElementById('statDetectedDuration');
+      const statVideoMeta = document.getElementById('statVideoMeta');
+      const badgeDurationProbed = document.getElementById('badgeDurationProbed');
+      const statTargetRange = document.getElementById('statTargetRange');
+      const statRangeSpan = document.getElementById('statRangeSpan');
+      const badgeLockState = document.getElementById('badgeLockState');
+      const statFramesCount = document.getElementById('statFramesCount');
+      const statExtractionRate = document.getElementById('statExtractionRate');
+      const badgeSamplingMode = document.getElementById('badgeSamplingMode');
+      const statEstMemory = document.getElementById('statEstMemory');
+      const statSplitParts = document.getElementById('statSplitParts');
+      const badgeWatchdogCount = document.getElementById('badgeWatchdogCount');
+
+      // Sizing Estimation Elements in Card 2
+      const lblFpsEstFrames = document.getElementById('lblFpsEstFrames');
+      const lblFpsEstSize = document.getElementById('lblFpsEstSize');
+      const lblFpsStepTime = document.getElementById('lblFpsStepTime');
+      const lblPerFrameEstSize = document.getElementById('lblPerFrameEstSize');
+      const lblTotalEstDownload = document.getElementById('lblTotalEstDownload');
+      const lblFormatSavingsTag = document.getElementById('lblFormatSavingsTag');
+      const lblResTargetDims = document.getElementById('lblResTargetDims');
+      const lblResCanvasBuffer = document.getElementById('lblResCanvasBuffer');
+
+      // Live Hardware & System Resource Elements
+      const resBadgeRamHeap = document.getElementById('resBadgeRamHeap');
+      const resValRamHeap = document.getElementById('resValRamHeap');
+      const resMeterRamFill = document.getElementById('resMeterRamFill');
+      const resSubRamDetail = document.getElementById('resSubRamDetail');
+      const resBadgeCpuCores = document.getElementById('resBadgeCpuCores');
+      const resValCpuSpeed = document.getElementById('resValCpuSpeed');
+      const resMeterCpuFill = document.getElementById('resMeterCpuFill');
+      const resSubCpuDetail = document.getElementById('resSubCpuDetail');
+      const resBadgeDiskQuota = document.getElementById('resBadgeDiskQuota');
+      const resValDiskEst = document.getElementById('resValDiskEst');
+      const resMeterDiskFill = document.getElementById('resMeterDiskFill');
+      const resSubDiskDetail = document.getElementById('resSubDiskDetail');
+      const resBadgeGpuStatus = document.getElementById('resBadgeGpuStatus');
+      const resValGpuRenderer = document.getElementById('resValGpuRenderer');
+      const resMeterGpuFill = document.getElementById('resMeterGpuFill');
+      const resSubGpuDetail = document.getElementById('resSubGpuDetail');
+
+      // Extraction Monitor Elements
+      const extractionMonitor = document.getElementById('extractionMonitor');
+      const extractionProgressFill = document.getElementById('extractionProgressFill');
+      const monitorPercentText = document.getElementById('monitorPercentText');
+      const metricCurrentFrame = document.getElementById('metricCurrentFrame');
+      const metricCurrentTimecode = document.getElementById('metricCurrentTimecode');
+      const metricDecodingFps = document.getElementById('metricDecodingFps');
+      const metricElapsedTime = document.getElementById('metricElapsedTime');
+      const metricEtaTime = document.getElementById('metricEtaTime');
+      const metricWatchdogNudges = document.getElementById('metricWatchdogNudges');
+
+      // Gallery Elements
+      const gallerySection = document.getElementById('gallerySection');
+      const galleryGrid = document.getElementById('galleryGrid');
+      const galleryCountBadge = document.getElementById('galleryCountBadge');
+      const galleryRamUsage = document.getElementById('galleryRamUsage');
+      const btnSelectAll = document.getElementById('btnSelectAll');
+      const btnDeselectAll = document.getElementById('btnDeselectAll');
+      const btnPrevPage = document.getElementById('btnPrevPage');
+      const btnNextPage = document.getElementById('btnNextPage');
+      const pageIndicator = document.getElementById('pageIndicator');
+      const btnDownloadZip = document.getElementById('btnDownloadZip');
+      const lblDownloadZip = document.getElementById('lblDownloadZip');
+      const btnClearFrames = document.getElementById('btnClearFrames');
+
+      // Lightbox Elements
+      const lightboxModal = document.getElementById('lightboxModal');
+      const lightboxImage = document.getElementById('lightboxImage');
+      const lightboxFrameIndexTag = document.getElementById('lightboxFrameIndexTag');
+      const lightboxTimecodeTag = document.getElementById('lightboxTimecodeTag');
+      const lightboxResolutionTag = document.getElementById('lightboxResolutionTag');
+      const lightboxScrubber = document.getElementById('lightboxScrubber');
+      const lightboxCurFrameNum = document.getElementById('lightboxCurFrameNum');
+      const lightboxTotalFramesNum = document.getElementById('lightboxTotalFramesNum');
+      const btnFlipbookPlay = document.getElementById('btnFlipbookPlay');
+      const btnFlipbookPrev = document.getElementById('btnFlipbookPrev');
+      const btnFlipbookNext = document.getElementById('btnFlipbookNext');
+      const btnFlipbookFirst = document.getElementById('btnFlipbookFirst');
+      const btnFlipbookLast = document.getElementById('btnFlipbookLast');
+      const btnCloseLightbox = document.getElementById('btnCloseLightbox');
+      const btnLightboxDownloadSingle = document.getElementById('btnLightboxDownloadSingle');
+      const flipFpsBtns = document.querySelectorAll('[data-flip-fps]');
+
+      const toastContainer = document.getElementById('toastContainer');
+      let currentLightboxBlobUrl = null;
+
+      // ========================================================================
+      // UTILITIES
+      // ========================================================================
+      function formatTimecode(sec) {
+        if (!Number.isFinite(sec) || isNaN(sec) || sec < 0) sec = 0;
+        const totalMs = Math.round(sec * 1000);
+        const ms = totalMs % 1000;
+        const totalSec = Math.floor(totalMs / 1000);
+        const s = totalSec % 60;
+        const m = Math.floor(totalSec / 60) % 60;
+        const h = Math.floor(totalSec / 3600);
+        
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const pad3 = (n) => String(n).padStart(3, '0');
+
+        if (h > 0) {
+          return `${pad2(h)}:${pad2(m)}:${pad2(s)}.${pad3(ms)}`;
+        }
+        return `${pad2(m)}:${pad2(s)}.${pad3(ms)}`;
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      }
+
+      function showToast(message, type = 'normal') {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${type === 'emerald' ? '#10B981' : '#FFFFFF'}" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>${message}</span>
+        `;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(6px)';
+          toast.style.transition = 'all 0.2s ease';
+          setTimeout(() => toast.remove(), 200);
+        }, 2600);
+      }
+
+      // ========================================================================
+      // SEQUENCE NAMING & DYNAMIC PATTERN ENGINE
+      // ========================================================================
+      function sanitizeNamePart(str) {
+        if (!str) return '';
+        return String(str).trim().replace(/[/\\?%*:|"<>]/g, '_');
+      }
+
+      function generateFrameFilename(frame, index, totalFrames) {
+        const frameId = (frame && frame.id) !== undefined ? frame.id : (index !== undefined ? index + 1 : 1);
+        const ext = (frame && frame.format) || state.format || 'png';
+        const rawCustom = state.customNamePrefix !== undefined ? state.customNamePrefix : 'frame';
+        const customName = sanitizeNamePart(rawCustom) || 'frame';
+        const videoBaseName = sanitizeNamePart(state.videoName) || 'video';
+
+        let safeTimecode = '00-00-000';
+        if (frame && frame.timecode) {
+          safeTimecode = frame.timecode.replace(/:/g, '-').replace(/\./g, '-');
+        }
+
+        let pattern = state.namingPattern || '{name}_{index:5}';
+        if (!pattern.includes('{name}') && !pattern.includes('{videoname}')) {
+          pattern = pattern.replace(/^frame_/i, '{name}_');
+        }
+
+        let filename = pattern
+          .replace(/\{videoname\}/gi, videoBaseName)
+          .replace(/\{video\}/gi, videoBaseName)
+          .replace(/\{name\}/gi, customName)
+          .replace(/\{index:6\}/gi, String(frameId).padStart(6, '0'))
+          .replace(/\{index:5\}/gi, String(frameId).padStart(5, '0'))
+          .replace(/\{index:4\}/gi, String(frameId).padStart(4, '0'))
+          .replace(/\{index:3\}/gi, String(frameId).padStart(3, '0'))
+          .replace(/\{index\}/gi, String(frameId))
+          .replace(/\{timecode\}/gi, safeTimecode);
+
+        filename = sanitizeNamePart(filename) || `frame_${String(frameId).padStart(5, '0')}`;
+        return `${filename}.${ext}`;
+      }
+
+      function updateFilenamePreview() {
+        if (!lblFilenamePreview) return;
+        const mockFrame = {
+          id: 1,
+          format: state.format,
+          timecode: '00:01.250'
+        };
+        lblFilenamePreview.textContent = generateFrameFilename(mockFrame, 0, 100);
+      }
+
+      // ========================================================================
+      // COMPLETE RESET ENGINE (EMPTY FRAMES & READY FOR NEW VIDEO)
+      // ========================================================================
+      function resetWorkflow() {
+        // 1. Cancel extraction if active
+        state.cancelRequested = true;
+        state.isExtracting = false;
+
+        // 2. Stop lightbox if playing
+        stopFlipbookPlay();
+        if (currentLightboxBlobUrl) {
+          URL.revokeObjectURL(currentLightboxBlobUrl);
+          currentLightboxBlobUrl = null;
+        }
+        if (lightboxModal.open) {
+          lightboxModal.close();
+        }
+
+        // 3. Revoke all frame Blob ObjectURLs to free RAM
+        state.activeObjectURLs.forEach((url) => URL.revokeObjectURL(url));
+        state.activeObjectURLs = [];
+
+        // 4. Revoke active video URL
+        if (state.videoUrl) {
+          URL.revokeObjectURL(state.videoUrl);
+          state.videoUrl = null;
+        }
+
+        // 5. Reset video element sources
+        sourceVideo.pause();
+        sourceVideo.removeAttribute('src');
+        sourceVideo.load();
+        offscreenVideo.removeAttribute('src');
+        offscreenVideo.load();
+
+        // 6. Reset file picker so the exact same file can be chosen again
+        fileInput.value = '';
+
+        // 7. Reset State
+        state.videoFile = null;
+        state.videoDuration = 0;
+        state.videoWidth = 0;
+        state.videoHeight = 0;
+        state.videoName = 'video';
+        state.isSynthetic = false;
+        state.startTime = 0;
+        state.endTime = 0;
+        state.watchdogNudges = 0;
+        state.frames = [];
+        state.selectedFrameIds.clear();
+        state.currentPage = 1;
+
+        // 8. Restore UI to clean initial state
+        videoPlayerWrapper.classList.remove('visible');
+        dropzone.classList.remove('hidden');
+        extractionMonitor.classList.remove('visible');
+        gallerySection.classList.remove('visible');
+        customRangePanel.classList.remove('visible');
+        chkFullDurationLock.checked = true;
+        state.fullDurationLock = true;
+
+        btnStartExtraction.disabled = true;
+        btnStartExtraction.classList.remove('hidden');
+        btnCancelExtraction.classList.add('hidden');
+        actionHelpText.textContent = 'Drop or choose a video file to begin';
+
+        badgeDurationProbed.textContent = 'Ready';
+        badgeDurationProbed.style.background = '';
+        badgeDurationProbed.style.color = '';
+        badgeWatchdogCount.textContent = 'Watchdog 0';
+
+        videoScrubber.value = 0;
+        playheadTime.textContent = '00:00.000 / 00:00.000';
+        iconPlay.classList.remove('hidden');
+        iconPause.classList.add('hidden');
+
+        if (txtCustomName) txtCustomName.value = 'frame';
+        state.customNamePrefix = 'frame';
+        if (selNamingPattern) selNamingPattern.value = '{name}_{index:5}';
+        state.namingPattern = '{name}_{index:5}';
+        updateFilenamePreview();
+
+        updateTelemetry();
+        showToast('All frames cleared. Ready to upload a new video.', 'normal');
+      }
+
+      // ========================================================================
+      // 1. TRUE FULL-VIDEO DURATION PROBING (1e101 SEEK)
+      // ========================================================================
+      async function probeTrueVideoDuration(videoEl) {
+        if (!videoEl) return 0;
+
+        return new Promise((resolve) => {
+          let initialDuration = videoEl.duration;
+          const cleanup = () => {
+            videoEl.removeEventListener('seeked', onSeeked);
+            videoEl.removeEventListener('error', onError);
+          };
+
+          const timeoutId = setTimeout(() => {
+            cleanup();
+            videoEl.currentTime = 0;
+            const fallback = Number.isFinite(videoEl.duration) ? videoEl.duration : 0;
+            resolve(fallback);
+          }, 1500);
+
+          const onSeeked = () => {
+            cleanup();
+            clearTimeout(timeoutId);
+            const trueEnd = videoEl.currentTime > 0 ? videoEl.currentTime : videoEl.duration;
+            videoEl.currentTime = 0;
+            resolve(Number.isFinite(trueEnd) ? trueEnd : (Number.isFinite(videoEl.duration) ? videoEl.duration : 0));
+          };
+
+          const onError = () => {
+            cleanup();
+            clearTimeout(timeoutId);
+            videoEl.currentTime = 0;
+            resolve(Number.isFinite(videoEl.duration) ? videoEl.duration : 0);
+          };
+
+          videoEl.addEventListener('seeked', onSeeked, { once: true });
+          videoEl.addEventListener('error', onError, { once: true });
+
+          try {
+            videoEl.currentTime = 1e101;
+          } catch (e) {
+            clearTimeout(timeoutId);
+            cleanup();
+            resolve(Number.isFinite(videoEl.duration) ? videoEl.duration : 0);
+          }
+        });
+      }
+
+      // Handle video load and duration verification
+      async function handleVideoLoaded(fileOrBlob, isSynthetic = false, customName = null) {
+        // Clear any previous frames
+        state.activeObjectURLs.forEach((url) => URL.revokeObjectURL(url));
+        state.activeObjectURLs = [];
+        state.frames = [];
+        state.selectedFrameIds.clear();
+        gallerySection.classList.remove('visible');
+
+        if (state.videoUrl) {
+          URL.revokeObjectURL(state.videoUrl);
+        }
+
+        state.videoFile = fileOrBlob;
+        state.isSynthetic = isSynthetic;
+        state.videoName = customName || (fileOrBlob.name ? fileOrBlob.name.replace(/\.[^/.]+$/, '') : 'video');
+        state.videoUrl = URL.createObjectURL(fileOrBlob);
+
+        sourceVideo.src = state.videoUrl;
+        offscreenVideo.src = state.videoUrl;
+
+        await new Promise((resolve) => {
+          sourceVideo.onloadedmetadata = resolve;
+        });
+
+        state.videoWidth = sourceVideo.videoWidth || 1920;
+        state.videoHeight = sourceVideo.videoHeight || 1080;
+
+        badgeDurationProbed.textContent = 'Probing...';
+        badgeDurationProbed.style.background = 'var(--accent-amber-bg)';
+        badgeDurationProbed.style.color = '#B45309';
+
+        const trueDuration = await probeTrueVideoDuration(sourceVideo);
+        state.videoDuration = trueDuration > 0 ? trueDuration : (sourceVideo.duration || 10);
+
+        badgeDurationProbed.textContent = 'Duration Verified';
+        badgeDurationProbed.style.background = 'var(--accent-emerald-bg)';
+        badgeDurationProbed.style.color = 'var(--accent-emerald)';
+
+        // Display video player & hide dropzone
+        dropzone.classList.add('hidden');
+        videoPlayerWrapper.classList.add('visible');
+        lblVideoFileName.textContent = state.videoName;
+        lblVideoResolution.textContent = `${state.videoWidth}×${state.videoHeight}`;
+
+        numStartTime.max = state.videoDuration;
+        numEndTime.max = state.videoDuration;
+        numEndTime.value = state.videoDuration.toFixed(3);
+
+        if (state.fullDurationLock) {
+          state.startTime = 0;
+          state.endTime = state.videoDuration;
+        } else {
+          state.startTime = Math.min(parseFloat(numStartTime.value) || 0, state.videoDuration);
+          state.endTime = Math.max(parseFloat(numEndTime.value) || state.videoDuration, state.startTime);
+        }
+
+        updateScaledDimensions();
+
+        videoScrubber.max = state.videoDuration;
+        videoScrubber.value = 0;
+        playheadTime.textContent = `00:00.000 / ${formatTimecode(state.videoDuration)}`;
+
+        btnStartExtraction.disabled = false;
+        actionHelpText.textContent = `Ready: ${state.videoName} (${formatTimecode(state.videoDuration)})`;
+
+        updateFilenamePreview();
+        updateTelemetry();
+        showToast(`Video loaded: ${formatTimecode(state.videoDuration)} probed`, 'emerald');
+      }
+
+      // ========================================================================
+      // 2. 60FPS SYNTHETIC TEST VIDEO GENERATOR
+      // ========================================================================
+      async function generateSyntheticTestClip(durationSec = 10) {
+        showToast(`Synthesizing ${durationSec}s @ 60FPS test video...`, 'normal');
+        btnQuickSynth.disabled = true;
+        btnDropzoneSynth.disabled = true;
+
+        const synthCanvas = document.createElement('canvas');
+        synthCanvas.width = 1280;
+        synthCanvas.height = 720;
+        const ctx = synthCanvas.getContext('2d');
+
+        const stream = synthCanvas.captureStream(60);
+        let mimeType = 'video/webm;codecs=vp9';
+        if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
+        if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: 8000000
+        });
+
+        const chunks = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        const totalFrames = durationSec * 60;
+        let frameCount = 0;
+        recorder.start();
+
+        const ball = { x: 200, y: 300, vx: 9, vy: 7, r: 35 };
+
+        return new Promise((resolve) => {
+          const drawFrame = () => {
+            if (frameCount >= totalFrames) {
+              recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: mimeType });
+                handleVideoLoaded(blob, true, `synth_60fps_${durationSec}s`);
+                btnQuickSynth.disabled = false;
+                btnDropzoneSynth.disabled = false;
+                resolve();
+              };
+              recorder.stop();
+              return;
+            }
+
+            const t = frameCount / 60;
+
+            // Background
+            ctx.fillStyle = '#09090B';
+            ctx.fillRect(0, 0, synthCanvas.width, synthCanvas.height);
+
+            // Grid
+            ctx.strokeStyle = '#18181B';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < synthCanvas.width; x += 40) {
+              ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, synthCanvas.height); ctx.stroke();
+            }
+            for (let y = 0; y < synthCanvas.height; y += 40) {
+              ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(synthCanvas.width, y); ctx.stroke();
+            }
+
+            // Header text
+            ctx.fillStyle = '#71717A';
+            ctx.font = '600 15px "Inter", sans-serif';
+            ctx.fillText('FRAME FORGE · 60FPS CALIBRATION STREAM', 40, 50);
+
+            // Timecode
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '700 72px "JetBrains Mono", monospace';
+            ctx.fillText(formatTimecode(t), 40, 170);
+
+            // Frame counter
+            ctx.fillStyle = '#3B82F6';
+            ctx.font = '700 30px "JetBrains Mono", monospace';
+            const fStr = String(frameCount + 1).padStart(5, '0');
+            ctx.fillText(`FRAME #${fStr} / ${totalFrames}`, 40, 225);
+
+            // Rotating sweep
+            const centerX = 980;
+            const centerY = 360;
+            const radius = 150;
+
+            ctx.strokeStyle = '#27272A';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const angle = (frameCount % 60) * ((Math.PI * 2) / 60);
+            ctx.strokeStyle = '#7C3AED';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius);
+            ctx.stroke();
+
+            // Bouncing orb
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            if (ball.x - ball.r < 40 || ball.x + ball.r > 740) ball.vx *= -1;
+            if (ball.y - ball.r < 270 || ball.y + ball.r > 640) ball.vy *= -1;
+
+            const hue = (frameCount * 3) % 360;
+            ctx.fillStyle = `hsl(${hue}, 85%, 60%)`;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Color spectrum bars
+            const colors = ['#2563EB', '#10B981', '#7C3AED', '#F59E0B', '#F43F5E', '#FFFFFF'];
+            const barW = (synthCanvas.width - 80) / colors.length;
+            colors.forEach((col, idx) => {
+              ctx.fillStyle = col;
+              ctx.fillRect(40 + idx * barW, 660, barW - 6, 20);
+            });
+
+            frameCount++;
+            requestAnimationFrame(drawFrame);
+          };
+
+          drawFrame();
+        });
+      }
+
+      // ========================================================================
+      // 3. CALCULATION & TELEMETRY
+      // ========================================================================
+      function updateScaledDimensions() {
+        let targetW = state.videoWidth || 1920;
+        let targetH = state.videoHeight || 1080;
+
+        if (state.scaleMode === '2160p') {
+          targetW = 3840; targetH = 2160;
+        } else if (state.scaleMode === '1080p') {
+          targetW = 1920; targetH = 1080;
+        } else if (state.scaleMode === '720p') {
+          targetW = 1280; targetH = 720;
+        } else if (state.scaleMode === '480p') {
+          targetW = 854; targetH = 480;
+        } else if (state.scaleMode === 'custom') {
+          targetW = parseInt(numCustomWidth.value) || 1920;
+          targetH = parseInt(numCustomHeight.value) || 1080;
+        }
+
+        offscreenCanvas.width = targetW;
+        offscreenCanvas.height = targetH;
+        lblScaledDimensions.textContent = `${targetW} × ${targetH} (${state.scaleMode.toUpperCase()})`;
+      }
+
+      function calculateExtractionSequence() {
+        const span = Math.max(0, state.endTime - state.startTime);
+        if (span <= 0 || state.fps <= 0) return [];
+
+        const targetTimes = [];
+        const interval = 1 / state.fps;
+        let t = state.startTime;
+
+        while (t <= state.endTime + 0.0001) {
+          targetTimes.push(t);
+          t += interval;
+        }
+        return targetTimes;
+      }
+
+      function updateTelemetry() {
+        const duration = state.videoDuration;
+        statDetectedDuration.textContent = formatTimecode(duration);
+        statVideoMeta.textContent = state.videoWidth ? `${state.videoWidth}×${state.videoHeight} · ${state.isSynthetic ? 'Synthetic' : 'Local File'}` : 'No video loaded';
+
+        // Range
+        statTargetRange.textContent = `${state.startTime.toFixed(2)}s → ${state.endTime.toFixed(2)}s`;
+        const span = Math.max(0, state.endTime - state.startTime);
+        statRangeSpan.textContent = `Window: ${span.toFixed(2)}s (${formatTimecode(span)})`;
+        badgeLockState.textContent = state.fullDurationLock ? 'Full-Lock ON' : 'Custom Range';
+        badgeLockState.style.background = state.fullDurationLock ? 'var(--accent-emerald-bg)' : 'var(--bg-card-subtle)';
+        badgeLockState.style.color = state.fullDurationLock ? 'var(--accent-emerald)' : 'var(--text-secondary)';
+
+        // Sequence
+        const sequence = calculateExtractionSequence();
+        const total = sequence.length;
+        statFramesCount.textContent = `${total.toLocaleString()} Frames`;
+        badgeSamplingMode.textContent = `${state.fps} FPS`;
+        statExtractionRate.textContent = total > 0 ? `@ ${state.fps} FPS (${(1/state.fps).toFixed(3)}s step)` : 'Calculated sequence size';
+
+        // File Sizing and Memory Calculations
+        const pixels = (offscreenCanvas.width || 1920) * (offscreenCanvas.height || 1080);
+        const rawBufferBytes = pixels * 4;
+
+        let bytesPerFrame = 250000;
+        if (state.format === 'png') {
+          bytesPerFrame = pixels * 0.82;
+        } else if (state.format === 'jpeg') {
+          bytesPerFrame = pixels * (0.05 + 0.12 * state.quality);
+        } else if (state.format === 'webp') {
+          bytesPerFrame = pixels * (0.03 + 0.08 * state.quality);
+        }
+
+        const estTotalBytes = total * bytesPerFrame;
+        statEstMemory.textContent = `~${formatBytes(estTotalBytes)}`;
+
+        const splitLimit = state.splitBatchSize;
+        const partsCount = total > 0 ? Math.ceil(total / splitLimit) : 0;
+        statSplitParts.textContent = `Auto-Split: ${partsCount} ZIP Part${partsCount > 1 ? 's' : ''}`;
+
+        // 1. Live Sizing Callouts in Card 2
+        if (lblFpsEstFrames) lblFpsEstFrames.textContent = `${total.toLocaleString()} Frames`;
+        if (lblFpsEstSize) lblFpsEstSize.textContent = `~${formatBytes(estTotalBytes)}`;
+        if (lblFpsStepTime) lblFpsStepTime.textContent = `${(1 / state.fps).toFixed(3)}s step`;
+
+        if (lblPerFrameEstSize) lblPerFrameEstSize.textContent = `~${formatBytes(bytesPerFrame)}`;
+        if (lblTotalEstDownload) lblTotalEstDownload.textContent = `~${formatBytes(estTotalBytes)}`;
+
+        if (lblFormatSavingsTag) {
+          if (state.format === 'png') {
+            lblFormatSavingsTag.textContent = 'Lossless 100%';
+            lblFormatSavingsTag.style.background = 'var(--accent-blue-bg)';
+            lblFormatSavingsTag.style.color = 'var(--accent-blue)';
+            lblFormatSavingsTag.style.borderColor = 'var(--accent-blue-border)';
+          } else {
+            const pngEstimate = pixels * 0.82;
+            const savings = Math.max(0, Math.min(98, Math.round((1 - (bytesPerFrame / pngEstimate)) * 100)));
+            lblFormatSavingsTag.textContent = `~${savings}% Space Saved`;
+            if (state.format === 'webp') {
+              lblFormatSavingsTag.style.background = 'var(--accent-violet-bg)';
+              lblFormatSavingsTag.style.color = 'var(--accent-violet)';
+              lblFormatSavingsTag.style.borderColor = 'var(--accent-violet-border)';
+            } else {
+              lblFormatSavingsTag.style.background = 'var(--accent-emerald-bg)';
+              lblFormatSavingsTag.style.color = 'var(--accent-emerald)';
+              lblFormatSavingsTag.style.borderColor = 'var(--accent-emerald-border)';
+            }
+          }
+        }
+
+        if (lblResTargetDims) {
+          lblResTargetDims.textContent = `${offscreenCanvas.width} × ${offscreenCanvas.height} (${(pixels / 1000000).toFixed(2)} MP)`;
+        }
+        if (lblResCanvasBuffer) {
+          lblResCanvasBuffer.textContent = `${formatBytes(rawBufferBytes)} / frame`;
+        }
+
+        // Update Disk required in Resource Grid
+        if (resValDiskEst) {
+          resValDiskEst.textContent = total > 0 ? `~${formatBytes(estTotalBytes)} Needed` : `~0 MB Needed`;
+        }
+
+        lblStartBtn.textContent = total > 0 ? `START EXTRACTION (${total} FRAMES)` : 'START EXTRACTION';
+
+        // Trigger hardware stats update
+        updateLiveSystemResources();
+      }
+
+      // ========================================================================
+      // LIVE HARDWARE & SYSTEM RESOURCE PROFILER (RAM, CPU, DISK, GPU)
+      // ========================================================================
+      let cachedGpuInfo = null;
+
+      function detectGpuAdapter() {
+        if (cachedGpuInfo) return cachedGpuInfo;
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          if (!gl) {
+            cachedGpuInfo = { name: 'Canvas 2D Engine', vendor: 'System' };
+            return cachedGpuInfo;
+          }
+          const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+          if (!debugInfo) {
+            cachedGpuInfo = {
+              name: gl.getParameter(gl.RENDERER) || 'Direct3D / Metal Acceleration',
+              vendor: gl.getParameter(gl.VENDOR) || 'Hardware'
+            };
+            return cachedGpuInfo;
+          }
+          let renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || 'Hardware Accelerated';
+          let vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || 'GPU';
+
+          let clean = renderer
+            .replace(/ANGLE \(/i, '')
+            .replace(/\)$/, '')
+            .replace(/vs_\d_\d ps_\d_\d/i, '')
+            .replace(/Direct3D11 vs_\d_\d ps_\d_\d/i, 'D3D11')
+            .trim();
+          if (clean.length > 36) clean = clean.substring(0, 36) + '...';
+          cachedGpuInfo = { name: clean, vendor: vendor };
+          return cachedGpuInfo;
+        } catch (e) {
+          cachedGpuInfo = { name: 'Direct3D11 / Metal GPU', vendor: 'System' };
+          return cachedGpuInfo;
+        }
+      }
+
+      let lastHeartbeat = performance.now();
+      let eventLoopFps = 60;
+      let eventLoopLatencyMs = 16.6;
+
+      function startHeartbeat() {
+        function tick(now) {
+          const delta = now - lastHeartbeat;
+          lastHeartbeat = now;
+          if (delta > 0 && delta < 1000) {
+            const instFps = Math.min(120, Math.max(1, 1000 / delta));
+            eventLoopFps = Math.round((eventLoopFps * 0.8) + (instFps * 0.2));
+            eventLoopLatencyMs = parseFloat(((eventLoopLatencyMs * 0.8) + (delta * 0.2)).toFixed(1));
+          }
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }
+
+      async function updateLiveSystemResources() {
+        // 1. RAM Usage
+        const activeFrameBytes = state.frames.reduce((acc, f) => acc + (f.size || 0), 0);
+        if (window.performance && window.performance.memory && resValRamHeap) {
+          const mem = window.performance.memory;
+          const usedMB = (mem.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+          const limitMB = (mem.jsHeapSizeLimit / (1024 * 1024)).toFixed(0);
+          const pct = Math.min(100, Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100));
+
+          if (resBadgeRamHeap) resBadgeRamHeap.textContent = `Heap ${pct}%`;
+          resValRamHeap.textContent = `${usedMB} MB / ${(limitMB / 1024).toFixed(1)} GB`;
+          if (resMeterRamFill) {
+            resMeterRamFill.style.width = `${Math.max(2, pct)}%`;
+            resMeterRamFill.className = pct > 80 ? 'resource-meter-fill amber' : 'resource-meter-fill';
+          }
+        } else if (resValRamHeap) {
+          if (resBadgeRamHeap) resBadgeRamHeap.textContent = 'Active RAM';
+          resValRamHeap.textContent = `${formatBytes(activeFrameBytes)} Blobs`;
+          if (resMeterRamFill) resMeterRamFill.style.width = '15%';
+        }
+        if (resSubRamDetail) {
+          resSubRamDetail.textContent = `Frame Store: ${formatBytes(activeFrameBytes)} in RAM (${state.frames.length} frames)`;
+        }
+
+        // 2. CPU & Concurrency
+        const cores = navigator.hardwareConcurrency || 8;
+        if (resBadgeCpuCores) resBadgeCpuCores.textContent = `${cores} Cores`;
+        if (resValCpuSpeed) resValCpuSpeed.textContent = `${eventLoopFps.toFixed(0)} FPS Event Loop`;
+        if (resMeterCpuFill) {
+          const cpuResponsivenessPct = Math.min(100, Math.max(5, Math.round((eventLoopFps / 60) * 100)));
+          resMeterCpuFill.style.width = `${cpuResponsivenessPct}%`;
+        }
+
+        let decodeVelocity = 'Idle';
+        if (state.isExtracting && metricDecodingFps) {
+          decodeVelocity = metricDecodingFps.textContent || 'Active';
+        }
+        if (resSubCpuDetail) {
+          resSubCpuDetail.textContent = `Latency: ${eventLoopLatencyMs}ms · Engine: ${decodeVelocity}`;
+        }
+
+        // 3. Disk & Storage Quota
+        if (navigator.storage && navigator.storage.estimate) {
+          try {
+            const estimate = await navigator.storage.estimate();
+            const usedStr = formatBytes(estimate.usage || 0);
+            const quotaStr = formatBytes(estimate.quota || 0);
+            const freeStr = formatBytes(Math.max(0, (estimate.quota || 0) - (estimate.usage || 0)));
+            const pct = estimate.quota ? Math.round(((estimate.usage || 0) / estimate.quota) * 100) : 0;
+            if (resBadgeDiskQuota) resBadgeDiskQuota.textContent = `${freeStr} Free`;
+            if (resSubDiskDetail) resSubDiskDetail.textContent = `Browser Quota: ${usedStr} of ${quotaStr} (${pct}%)`;
+            if (resMeterDiskFill) resMeterDiskFill.style.width = `${Math.max(1, pct)}%`;
+          } catch (e) {
+            if (resSubDiskDetail) resSubDiskDetail.textContent = 'Browser storage quota active';
+          }
+        } else if (resSubDiskDetail) {
+          resSubDiskDetail.textContent = 'HTML5 Blob direct archive mode';
+        }
+
+        // 4. GPU Acceleration
+        const gpu = detectGpuAdapter();
+        if (resValGpuRenderer) resValGpuRenderer.textContent = gpu.name;
+        if (resSubGpuDetail) resSubGpuDetail.textContent = `Offscreen Canvas 2D: HW Accelerated (${gpu.vendor})`;
+      }
+
+      // ========================================================================
+      // 4. 3-STAGE SEEK WATCHDOG
+      // ========================================================================
+      async function seekAndDecodeFrame(videoEl, targetTime, duration, canvas, ctx, mimeType, quality) {
+        let attempt = 0;
+        let currentSeekTime = Math.min(Math.max(0, targetTime), duration);
+        const maxRetries = 3;
+
+        while (attempt <= maxRetries) {
+          try {
+            await new Promise((resolve, reject) => {
+              let timer = null;
+              const cleanup = () => {
+                if (timer) clearTimeout(timer);
+                videoEl.removeEventListener('seeked', onSeeked);
+                videoEl.removeEventListener('error', onError);
+              };
+
+              const onSeeked = () => {
+                cleanup();
+                if (videoEl.readyState >= 2) {
+                  resolve();
+                } else {
+                  const onCanPlay = () => {
+                    videoEl.removeEventListener('canplay', onCanPlay);
+                    resolve();
+                  };
+                  videoEl.addEventListener('canplay', onCanPlay, { once: true });
+                  setTimeout(() => {
+                    videoEl.removeEventListener('canplay', onCanPlay);
+                    resolve();
+                  }, 200);
+                }
+              };
+
+              const onError = (e) => {
+                cleanup();
+                reject(e || new Error('Video seek error'));
+              };
+
+              timer = setTimeout(() => {
+                cleanup();
+                reject(new Error('Seek timeout (>1200ms)'));
+              }, 1200);
+
+              videoEl.addEventListener('seeked', onSeeked, { once: true });
+              videoEl.addEventListener('error', onError, { once: true });
+
+              videoEl.currentTime = currentSeekTime;
+            });
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+            const blob = await new Promise((resolve) => {
+              canvas.toBlob(resolve, mimeType, quality);
+            });
+
+            return { blob, retried: attempt > 0, attempts: attempt };
+          } catch (err) {
+            attempt++;
+            state.watchdogNudges++;
+            badgeWatchdogCount.textContent = `Watchdog ${state.watchdogNudges}`;
+            metricWatchdogNudges.textContent = `${state.watchdogNudges} Nudges`;
+
+            if (attempt > maxRetries) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+              const blob = await new Promise((resolve) => {
+                canvas.toBlob(resolve, mimeType, quality);
+              });
+              return { blob, retried: true, attempts: attempt, stalled: true };
+            }
+
+            currentSeekTime = Math.min(duration, currentSeekTime + 0.0015);
+          }
+        }
+      }
+
+      // ========================================================================
+      // 5. EXTRACTION EXECUTION
+      // ========================================================================
+      async function runExtractionPipeline() {
+        if (!state.videoUrl || state.isExtracting) return;
+
+        const timestamps = calculateExtractionSequence();
+        const total = timestamps.length;
+        if (total === 0) {
+          showToast('No frames in selected range', 'rose');
+          return;
+        }
+
+        state.isExtracting = true;
+        state.cancelRequested = false;
+        state.frames = [];
+        state.selectedFrameIds.clear();
+        state.watchdogNudges = 0;
+
+        btnStartExtraction.classList.add('hidden');
+        btnCancelExtraction.classList.remove('hidden');
+        extractionMonitor.classList.add('visible');
+        gallerySection.classList.remove('visible');
+
+        const startTimeEpoch = performance.now();
+        let mimeType = 'image/png';
+        if (state.format === 'jpeg') mimeType = 'image/jpeg';
+        else if (state.format === 'webp') mimeType = 'image/webp';
+
+        for (let i = 0; i < total; i++) {
+          if (state.cancelRequested) {
+            showToast('Extraction halted by user', 'rose');
+            break;
+          }
+
+          const targetTime = timestamps[i];
+          const result = await seekAndDecodeFrame(
+            offscreenVideo,
+            targetTime,
+            state.videoDuration,
+            offscreenCanvas,
+            offscreenCtx,
+            mimeType,
+            state.quality
+          );
+
+          if (result && result.blob) {
+            const frameObj = {
+              id: i + 1,
+              index: i + 1,
+              timestamp: targetTime,
+              timecode: formatTimecode(targetTime),
+              blob: result.blob,
+              size: result.blob.size,
+              width: offscreenCanvas.width,
+              height: offscreenCanvas.height,
+              format: state.format
+            };
+            state.frames.push(frameObj);
+          }
+
+          const currentCount = i + 1;
+          const percent = ((currentCount / total) * 100).toFixed(1);
+          extractionProgressFill.style.width = `${percent}%`;
+          monitorPercentText.textContent = `${percent}%`;
+
+          metricCurrentFrame.textContent = `${currentCount} / ${total}`;
+          metricCurrentTimecode.textContent = formatTimecode(targetTime);
+
+          const elapsedSec = (performance.now() - startTimeEpoch) / 1000;
+          metricElapsedTime.textContent = formatTimecode(elapsedSec);
+
+          const fpsVelocity = (currentCount / elapsedSec).toFixed(1);
+          metricDecodingFps.textContent = `${fpsVelocity} FPS`;
+
+          const remainingFrames = total - currentCount;
+          const etaSec = remainingFrames / (currentCount / elapsedSec);
+          metricEtaTime.textContent = Number.isFinite(etaSec) ? formatTimecode(etaSec) : '--:--';
+        }
+
+        state.isExtracting = false;
+        btnStartExtraction.classList.remove('hidden');
+        btnCancelExtraction.classList.add('hidden');
+
+        showToast(`Extraction complete! ${state.frames.length} frames ready.`, 'emerald');
+        initGallery();
+      }
+
+      // ========================================================================
+      // 6. VIRTUALIZED OBJECTURL GALLERY
+      // ========================================================================
+      function initGallery() {
+        if (state.frames.length === 0) return;
+        state.currentPage = 1;
+        gallerySection.classList.add('visible');
+        renderGalleryPage();
+      }
+
+      function renderGalleryPage() {
+        state.activeObjectURLs.forEach((url) => URL.revokeObjectURL(url));
+        state.activeObjectURLs = [];
+
+        const total = state.frames.length;
+        const totalPages = Math.ceil(total / state.pageSize) || 1;
+        if (state.currentPage > totalPages) state.currentPage = totalPages;
+        if (state.currentPage < 1) state.currentPage = 1;
+
+        galleryCountBadge.textContent = `${total} Frames`;
+        const totalBytes = state.frames.reduce((acc, f) => acc + f.size, 0);
+        galleryRamUsage.textContent = `RAM: ${formatBytes(totalBytes)}`;
+
+        pageIndicator.textContent = `Page ${state.currentPage} of ${totalPages}`;
+        btnPrevPage.disabled = state.currentPage <= 1;
+        btnNextPage.disabled = state.currentPage >= totalPages;
+
+        galleryGrid.innerHTML = '';
+
+        const startIdx = (state.currentPage - 1) * state.pageSize;
+        const endIdx = Math.min(startIdx + state.pageSize, total);
+
+        for (let i = startIdx; i < endIdx; i++) {
+          const frame = state.frames[i];
+          const objectUrl = URL.createObjectURL(frame.blob);
+          state.activeObjectURLs.push(objectUrl);
+
+          const isSelected = state.selectedFrameIds.has(frame.id);
+          const currentFilename = generateFrameFilename(frame, i, total);
+
+          const card = document.createElement('div');
+          card.className = `frame-card ${isSelected ? 'selected' : ''}`;
+          card.dataset.id = frame.id;
+
+          card.innerHTML = `
+            <div class="frame-thumb-wrap">
+              <input type="checkbox" class="frame-select-chk" data-id="${frame.id}" ${isSelected ? 'checked' : ''}>
+              <img src="${objectUrl}" alt="${currentFilename}" loading="lazy">
+              <span class="frame-index-tag">#${String(frame.id).padStart(5, '0')}</span>
+              <span class="frame-time-tag">${frame.timecode}</span>
+            </div>
+            <div class="frame-card-footer">
+              <span class="frame-size-label">${formatBytes(frame.size)}</span>
+              <button class="frame-dl-btn" data-download-id="${frame.id}" title="Download ${currentFilename}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </button>
+            </div>
+          `;
+
+          const thumbWrap = card.querySelector('.frame-thumb-wrap');
+          thumbWrap.addEventListener('click', (e) => {
+            if (e.target.classList.contains('frame-select-chk')) return;
+            openLightbox(i);
+          });
+
+          const chk = card.querySelector('.frame-select-chk');
+          chk.addEventListener('change', (e) => {
+            if (e.target.checked) {
+              state.selectedFrameIds.add(frame.id);
+              card.classList.add('selected');
+            } else {
+              state.selectedFrameIds.delete(frame.id);
+              card.classList.remove('selected');
+            }
+            updateDownloadZipButtonLabel();
+          });
+
+          const dlBtn = card.querySelector('[data-download-id]');
+          dlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            downloadSingleFrame(frame);
+          });
+
+          galleryGrid.appendChild(card);
+        }
+
+        updateDownloadZipButtonLabel();
+      }
+
+      function updateDownloadZipButtonLabel() {
+        const selCount = state.selectedFrameIds.size;
+        if (selCount > 0) {
+          lblDownloadZip.textContent = `Download Selected (${selCount}) as ZIP`;
+        } else {
+          lblDownloadZip.textContent = `Download All (${state.frames.length}) as ZIP`;
+        }
+      }
+
+      function downloadSingleFrame(frame) {
+        const filename = generateFrameFilename(frame, frame.id - 1, state.frames.length || 1);
+        const url = URL.createObjectURL(frame.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+
+      // ========================================================================
+      // 7. MULTI-PART ZIP ARCHIVER
+      // ========================================================================
+      async function buildAndDownloadZipArchives() {
+        let targetFrames = state.frames;
+        if (state.selectedFrameIds.size > 0) {
+          targetFrames = state.frames.filter((f) => state.selectedFrameIds.has(f.id));
+        }
+
+        if (targetFrames.length === 0) {
+          showToast('No frames selected', 'rose');
+          return;
+        }
+
+        btnDownloadZip.disabled = true;
+        const total = targetFrames.length;
+        const batchSize = state.splitBatchSize;
+        const totalParts = Math.ceil(total / batchSize);
+
+        showToast(`Packaging ${total} frames into ${totalParts} ZIP archive(s)...`, 'normal');
+
+        for (let partIdx = 0; partIdx < totalParts; partIdx++) {
+          const start = partIdx * batchSize;
+          const end = Math.min(start + batchSize, total);
+          const chunk = targetFrames.slice(start, end);
+
+          lblDownloadZip.textContent = `Packaging Part ${partIdx + 1}/${totalParts}...`;
+
+          let zipBlob = null;
+
+          if (window.JSZip) {
+            const zip = new window.JSZip();
+
+            chunk.forEach((frame, idx) => {
+              const name = generateFrameFilename(frame, start + idx, total);
+              zip.file(name, frame.blob);
+            });
+
+            if (state.includeManifest) {
+              const manifest = {
+                generator: 'Frame Forge v2.0 Minimalist Edition',
+                sourceVideo: state.videoName,
+                probedDuration: state.videoDuration,
+                part: partIdx + 1,
+                totalParts: totalParts,
+                framesInPart: chunk.length,
+                totalFrames: total,
+                fps: state.fps,
+                resolution: `${offscreenCanvas.width}x${offscreenCanvas.height}`,
+                namingPattern: state.namingPattern,
+                customNamePrefix: state.customNamePrefix,
+                frames: chunk.map((f, idx) => ({
+                  id: f.id,
+                  filename: generateFrameFilename(f, start + idx, total),
+                  timestamp: f.timestamp,
+                  timecode: f.timecode,
+                  sizeBytes: f.size
+                }))
+              };
+              zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+            }
+
+            zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+          } else {
+            zipBlob = await createPureJsZip(chunk, start, total);
+          }
+
+          const partSuffix = totalParts > 1 ? `_part${partIdx + 1}_of_${totalParts}` : '';
+          const nameTag = (state.customNamePrefix && state.customNamePrefix.trim() !== 'frame') 
+            ? `_${sanitizeNamePart(state.customNamePrefix)}` 
+            : '_frames';
+          const zipFilename = `${state.videoName}${nameTag}${partSuffix}.zip`;
+
+          const downloadUrl = URL.createObjectURL(zipBlob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = zipFilename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        btnDownloadZip.disabled = false;
+        updateDownloadZipButtonLabel();
+        showToast('All ZIP archives generated and downloaded!', 'emerald');
+      }
+
+      async function createPureJsZip(chunk, startOffset = 0, totalCount = chunk.length) {
+        const fileEntries = [];
+        let offset = 0;
+
+        for (let idx = 0; idx < chunk.length; idx++) {
+          const frame = chunk[idx];
+          const name = generateFrameFilename(frame, startOffset + idx, totalCount);
+          const buffer = await frame.blob.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          fileEntries.push({ name, bytes, crc: crc32(bytes) });
+        }
+
+        const chunks = [];
+        const centralEntries = [];
+
+        fileEntries.forEach((file) => {
+          const nameBytes = new TextEncoder().encode(file.name);
+          const localHeader = new Uint8Array(30 + nameBytes.length);
+          const view = new DataView(localHeader.buffer);
+
+          view.setUint32(0, 0x04034b50, true);
+          view.setUint16(4, 20, true);
+          view.setUint16(6, 0, true);
+          view.setUint16(8, 0, true);
+          view.setUint16(10, 0, true);
+          view.setUint16(12, 0, true);
+          view.setUint32(14, file.crc, true);
+          view.setUint32(18, file.bytes.length, true);
+          view.setUint32(22, file.bytes.length, true);
+          view.setUint16(26, nameBytes.length, true);
+          view.setUint16(28, 0, true);
+          localHeader.set(nameBytes, 30);
+
+          centralEntries.push({ file, offset, nameBytes });
+          chunks.push(localHeader);
+          chunks.push(file.bytes);
+          offset += localHeader.length + file.bytes.length;
+        });
+
+        const centralOffset = offset;
+        let centralSize = 0;
+
+        centralEntries.forEach((item) => {
+          const header = new Uint8Array(46 + item.nameBytes.length);
+          const view = new DataView(header.buffer);
+
+          view.setUint32(0, 0x02014b50, true);
+          view.setUint16(4, 20, true);
+          view.setUint16(6, 20, true);
+          view.setUint16(8, 0, true);
+          view.setUint16(10, 0, true);
+          view.setUint16(12, 0, true);
+          view.setUint16(14, 0, true);
+          view.setUint32(16, item.file.crc, true);
+          view.setUint32(20, item.file.bytes.length, true);
+          view.setUint32(24, item.file.bytes.length, true);
+          view.setUint16(28, item.nameBytes.length, true);
+          view.setUint16(30, 0, true);
+          view.setUint16(32, 0, true);
+          view.setUint16(34, 0, true);
+          view.setUint16(36, 0, true);
+          view.setUint32(38, 0, true);
+          view.setUint32(42, item.offset, true);
+          header.set(item.nameBytes, 46);
+
+          chunks.push(header);
+          centralSize += header.length;
+        });
+
+        const eocd = new Uint8Array(22);
+        const eocdView = new DataView(eocd.buffer);
+        eocdView.setUint32(0, 0x06054b50, true);
+        eocdView.setUint16(4, 0, true);
+        eocdView.setUint16(6, 0, true);
+        eocdView.setUint16(8, fileEntries.length, true);
+        eocdView.setUint16(10, fileEntries.length, true);
+        eocdView.setUint32(12, centralSize, true);
+        eocdView.setUint32(16, centralOffset, true);
+        eocdView.setUint16(20, 0, true);
+        chunks.push(eocd);
+
+        return new Blob(chunks, { type: 'application/zip' });
+      }
+
+      function crc32(bytes) {
+        let crc = ~0;
+        for (let i = 0; i < bytes.length; i++) {
+          crc ^= bytes[i];
+          for (let j = 0; j < 8; j++) {
+            crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+          }
+        }
+        return ~crc >>> 0;
+      }
+
+      // ========================================================================
+      // 8. FLIPBOOK INSPECTOR LIGHTBOX
+      // ========================================================================
+      function openLightbox(index) {
+        if (!state.frames || state.frames.length === 0) return;
+        state.lightboxIndex = Math.max(0, Math.min(index, state.frames.length - 1));
+
+        lightboxScrubber.max = state.frames.length - 1;
+        lightboxTotalFramesNum.textContent = state.frames.length;
+
+        updateLightboxView();
+        lightboxModal.showModal();
+      }
+
+      function updateLightboxView() {
+        const frame = state.frames[state.lightboxIndex];
+        if (!frame) return;
+
+        if (currentLightboxBlobUrl) {
+          URL.revokeObjectURL(currentLightboxBlobUrl);
+        }
+        currentLightboxBlobUrl = URL.createObjectURL(frame.blob);
+        lightboxImage.src = currentLightboxBlobUrl;
+
+        const currentFrameFilename = generateFrameFilename(frame, state.lightboxIndex, state.frames.length);
+        lightboxFrameIndexTag.textContent = currentFrameFilename;
+        btnLightboxDownloadSingle.setAttribute('title', `Download ${currentFrameFilename}`);
+        lightboxTimecodeTag.textContent = frame.timecode;
+        lightboxResolutionTag.textContent = `${frame.width} × ${frame.height}`;
+
+        lightboxScrubber.value = state.lightboxIndex;
+        lightboxCurFrameNum.textContent = state.lightboxIndex + 1;
+      }
+
+      function toggleFlipbookPlay() {
+        if (state.lightboxPlaying) {
+          stopFlipbookPlay();
+        } else {
+          startFlipbookPlay();
+        }
+      }
+
+      function startFlipbookPlay() {
+        state.lightboxPlaying = true;
+        btnFlipbookPlay.textContent = 'Pause';
+        btnFlipbookPlay.classList.remove('btn-emerald');
+        btnFlipbookPlay.classList.add('btn-rose');
+
+        const interval = 1000 / state.lightboxFps;
+        state.lightboxTimer = setInterval(() => {
+          state.lightboxIndex = (state.lightboxIndex + 1) % state.frames.length;
+          updateLightboxView();
+        }, interval);
+      }
+
+      function stopFlipbookPlay() {
+        state.lightboxPlaying = false;
+        btnFlipbookPlay.textContent = 'Play';
+        btnFlipbookPlay.classList.remove('btn-rose');
+        btnFlipbookPlay.classList.add('btn-emerald');
+        if (state.lightboxTimer) {
+          clearInterval(state.lightboxTimer);
+          state.lightboxTimer = null;
+        }
+      }
+
+      function closeLightbox() {
+        stopFlipbookPlay();
+        if (currentLightboxBlobUrl) {
+          URL.revokeObjectURL(currentLightboxBlobUrl);
+          currentLightboxBlobUrl = null;
+        }
+        lightboxModal.close();
+      }
+
+      // ========================================================================
+      // 9. EVENT LISTENERS
+      // ========================================================================
+
+      // Reset All triggers
+      btnHeaderReset.addEventListener('click', resetWorkflow);
+      btnResetWorkflow.addEventListener('click', resetWorkflow);
+
+      // Drag and Drop
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleVideoLoaded(e.dataTransfer.files[0]);
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleVideoLoaded(e.target.files[0]);
+        }
+      });
+
+      // Synthetic 60FPS Generators
+      btnQuickSynth.addEventListener('click', () => generateSyntheticTestClip(10));
+      btnDropzoneSynth.addEventListener('click', () => generateSyntheticTestClip(10));
+
+      // Re-probe duration
+      btnReprobeDuration.addEventListener('click', async () => {
+        if (!sourceVideo.src) return;
+        showToast('Re-probing duration...', 'normal');
+        const dur = await probeTrueVideoDuration(sourceVideo);
+        state.videoDuration = dur;
+        if (state.fullDurationLock) {
+          state.endTime = dur;
+        }
+        updateTelemetry();
+        showToast(`Probed duration: ${formatTimecode(dur)}`, 'emerald');
+      });
+
+      // Full Duration Lock Switch
+      chkFullDurationLock.addEventListener('change', (e) => {
+        state.fullDurationLock = e.target.checked;
+        if (state.fullDurationLock) {
+          customRangePanel.classList.remove('visible');
+          state.startTime = 0;
+          state.endTime = state.videoDuration;
+        } else {
+          customRangePanel.classList.add('visible');
+          state.startTime = parseFloat(numStartTime.value) || 0;
+          state.endTime = parseFloat(numEndTime.value) || state.videoDuration;
+        }
+        updateTelemetry();
+      });
+
+      numStartTime.addEventListener('input', () => {
+        state.startTime = Math.max(0, Math.min(parseFloat(numStartTime.value) || 0, state.videoDuration));
+        updateTelemetry();
+      });
+
+      numEndTime.addEventListener('input', () => {
+        state.endTime = Math.max(state.startTime, Math.min(parseFloat(numEndTime.value) || state.videoDuration, state.videoDuration));
+        updateTelemetry();
+      });
+
+      btnSetStartCurrent.addEventListener('click', () => {
+        numStartTime.value = sourceVideo.currentTime.toFixed(3);
+        state.startTime = sourceVideo.currentTime;
+        updateTelemetry();
+      });
+
+      btnSetEndCurrent.addEventListener('click', () => {
+        numEndTime.value = sourceVideo.currentTime.toFixed(3);
+        state.endTime = sourceVideo.currentTime;
+        updateTelemetry();
+      });
+
+      // Video Preview Play/Pause & Scrub
+      btnPlayPause.addEventListener('click', () => {
+        if (sourceVideo.paused) {
+          sourceVideo.play();
+          iconPlay.classList.add('hidden');
+          iconPause.classList.remove('hidden');
+        } else {
+          sourceVideo.pause();
+          iconPlay.classList.remove('hidden');
+          iconPause.classList.add('hidden');
+        }
+      });
+
+      sourceVideo.addEventListener('timeupdate', () => {
+        videoScrubber.value = sourceVideo.currentTime;
+        playheadTime.textContent = `${formatTimecode(sourceVideo.currentTime)} / ${formatTimecode(state.videoDuration)}`;
+      });
+
+      videoScrubber.addEventListener('input', (e) => {
+        sourceVideo.currentTime = parseFloat(e.target.value);
+      });
+
+      // The 5 Clean FPS Presets (10, 24, 30, 45, 60)
+      fpsPillsContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('.pill-btn');
+        if (!btn) return;
+        fpsPillsContainer.querySelectorAll('.pill-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        state.fps = parseFloat(btn.dataset.fps);
+        lblSamplingDetail.textContent = `${state.fps} FPS`;
+        updateTelemetry();
+      });
+
+      // Format Buttons
+      formatBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          formatBtns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.format = btn.dataset.format;
+
+          if (state.format === 'png') {
+            qualitySliderRow.style.opacity = '0.45';
+            qualitySliderRow.style.pointerEvents = 'none';
+            lblQualityBadge.textContent = 'Lossless 100%';
+          } else {
+            qualitySliderRow.style.opacity = '1';
+            qualitySliderRow.style.pointerEvents = 'auto';
+            lblQualityBadge.textContent = `${Math.round(state.quality * 100)}% Quality`;
+          }
+          updateFilenamePreview();
+          updateTelemetry();
+        });
+      });
+
+      rangeQuality.addEventListener('input', (e) => {
+        state.quality = parseFloat(e.target.value);
+        valQualityNum.textContent = state.quality.toFixed(2);
+        lblQualityBadge.textContent = `${Math.round(state.quality * 100)}% Quality`;
+        updateTelemetry();
+      });
+
+      // Resolution Scaling
+      selResolutionScale.addEventListener('change', (e) => {
+        state.scaleMode = e.target.value;
+        if (state.scaleMode === 'custom') {
+          customResWrap.style.display = 'block';
+        } else {
+          customResWrap.style.display = 'none';
+        }
+        updateScaledDimensions();
+        updateTelemetry();
+      });
+
+      numCustomWidth.addEventListener('input', () => {
+        updateScaledDimensions();
+        updateTelemetry();
+      });
+      numCustomHeight.addEventListener('input', () => {
+        updateScaledDimensions();
+        updateTelemetry();
+      });
+
+      // Sequence Naming & ZIP Archiving Settings
+      if (txtCustomName) {
+        txtCustomName.addEventListener('input', (e) => {
+          state.customNamePrefix = e.target.value;
+          updateFilenamePreview();
+        });
+      }
+
+      selNamingPattern.addEventListener('change', (e) => {
+        state.namingPattern = e.target.value;
+        updateFilenamePreview();
+      });
+
+      selZipSplitSize.addEventListener('change', (e) => {
+        state.splitBatchSize = parseInt(e.target.value);
+        updateTelemetry();
+      });
+
+      chkIncludeManifest.addEventListener('change', (e) => {
+        state.includeManifest = e.target.checked;
+      });
+
+      // Extraction Controls
+      btnStartExtraction.addEventListener('click', runExtractionPipeline);
+      btnCancelExtraction.addEventListener('click', () => {
+        state.cancelRequested = true;
+      });
+
+      // Gallery Controls
+      btnPrevPage.addEventListener('click', () => {
+        if (state.currentPage > 1) {
+          state.currentPage--;
+          renderGalleryPage();
+        }
+      });
+
+      btnNextPage.addEventListener('click', () => {
+        const totalPages = Math.ceil(state.frames.length / state.pageSize);
+        if (state.currentPage < totalPages) {
+          state.currentPage++;
+          renderGalleryPage();
+        }
+      });
+
+      btnSelectAll.addEventListener('click', () => {
+        state.frames.forEach((f) => state.selectedFrameIds.add(f.id));
+        renderGalleryPage();
+      });
+
+      btnDeselectAll.addEventListener('click', () => {
+        state.selectedFrameIds.clear();
+        renderGalleryPage();
+      });
+
+      btnClearFrames.addEventListener('click', () => {
+        state.activeObjectURLs.forEach((url) => URL.revokeObjectURL(url));
+        state.activeObjectURLs = [];
+        state.frames = [];
+        state.selectedFrameIds.clear();
+        gallerySection.classList.remove('visible');
+        extractionMonitor.classList.remove('visible');
+        showToast('Extracted frames cleared from RAM', 'normal');
+      });
+
+      btnDownloadZip.addEventListener('click', buildAndDownloadZipArchives);
+
+      // Lightbox Controls
+      btnCloseLightbox.addEventListener('click', closeLightbox);
+      lightboxModal.addEventListener('cancel', closeLightbox);
+
+      btnFlipbookPlay.addEventListener('click', toggleFlipbookPlay);
+      btnFlipbookPrev.addEventListener('click', () => {
+        state.lightboxIndex = (state.lightboxIndex - 1 + state.frames.length) % state.frames.length;
+        updateLightboxView();
+      });
+      btnFlipbookNext.addEventListener('click', () => {
+        state.lightboxIndex = (state.lightboxIndex + 1) % state.frames.length;
+        updateLightboxView();
+      });
+      btnFlipbookFirst.addEventListener('click', () => {
+        state.lightboxIndex = 0;
+        updateLightboxView();
+      });
+      btnFlipbookLast.addEventListener('click', () => {
+        state.lightboxIndex = state.frames.length - 1;
+        updateLightboxView();
+      });
+
+      lightboxScrubber.addEventListener('input', (e) => {
+        state.lightboxIndex = parseInt(e.target.value);
+        updateLightboxView();
+      });
+
+      flipFpsBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          flipFpsBtns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.lightboxFps = parseInt(btn.dataset.flipFps);
+          if (state.lightboxPlaying) {
+            stopFlipbookPlay();
+            startFlipbookPlay();
+          }
+        });
+      });
+
+      btnLightboxDownloadSingle.addEventListener('click', () => {
+        const frame = state.frames[state.lightboxIndex];
+        if (frame) downloadSingleFrame(frame);
+      });
+
+      // Keyboard navigation
+      window.addEventListener('keydown', (e) => {
+        if (lightboxModal.open) {
+          if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            toggleFlipbookPlay();
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            state.lightboxIndex = (state.lightboxIndex + 1) % state.frames.length;
+            updateLightboxView();
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            state.lightboxIndex = (state.lightboxIndex - 1 + state.frames.length) % state.frames.length;
+            updateLightboxView();
+          } else if (e.key === 'Home') {
+            e.preventDefault();
+            state.lightboxIndex = 0;
+            updateLightboxView();
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            state.lightboxIndex = state.frames.length - 1;
+            updateLightboxView();
+          }
+        }
+      });
+
+      // ========================================================================
+      // 10. NIGHT / DARK MODE THEME CONTROLLER
+      // ========================================================================
+      const btnThemeToggle = document.getElementById('btnThemeToggle');
+      const iconSun = document.getElementById('iconSun');
+      const iconMoon = document.getElementById('iconMoon');
+      const lblThemeText = document.getElementById('lblThemeText');
+
+      function setTheme(theme) {
+        if (theme === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          iconSun.classList.remove('hidden');
+          iconMoon.classList.add('hidden');
+          lblThemeText.textContent = 'Light';
+          localStorage.setItem('frameforge-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+          iconSun.classList.add('hidden');
+          iconMoon.classList.remove('hidden');
+          lblThemeText.textContent = 'Night';
+          localStorage.setItem('frameforge-theme', 'light');
+        }
+      }
+
+      function initTheme() {
+        const savedTheme = localStorage.getItem('frameforge-theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+        setTheme(initialTheme);
+      }
+
+      btnThemeToggle.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        setTheme(isDark ? 'light' : 'dark');
+        showToast(isDark ? 'Switched to Light mode' : 'Switched to Night mode', 'normal');
+      });
+
+      initTheme();
+
+      // Start live hardware monitoring & thread heartbeat
+      startHeartbeat();
+      setInterval(updateLiveSystemResources, 1000);
+
+      // Initial calculation & filename preview
+      updateTelemetry();
+      updateFilenamePreview();
+      updateLiveSystemResources();
+
+    })();
+  </script>
+</body>
+</html>
