@@ -9,6 +9,7 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import { ProgressBar } from '../components/ProgressBar';
 import { FramesGallery } from '../components/FramesGallery';
 import { LightboxModal } from '../components/LightboxModal';
+import { BgRemoverApp } from '../components/bg-remover/BgRemoverApp';
 import {
   FpsPreset,
   ImageFormat,
@@ -30,6 +31,9 @@ import {
 } from '../lib/utils';
 
 export default function FrameForgePage() {
+  // App selection state
+  const [currentApp, setCurrentApp] = useState<'frame-forge' | 'bg-remover'>('bg-remover');
+
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(true);
 
@@ -456,6 +460,8 @@ export default function FrameForgePage() {
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#07090e] transition-colors">
       {/* Top Header */}
       <Header
+        currentApp={currentApp}
+        onSelectApp={setCurrentApp}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode((prev) => !prev)}
         onReset={handleReset}
@@ -467,104 +473,114 @@ export default function FrameForgePage() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 flex flex-col gap-4">
-        {/* Minimalist System Telemetry Ribbon */}
-        <ResourceMonitor
-          telemetry={{ ...telemetry, inMemoryBlobBytes }}
-          framesCount={frames.length}
-          estTotalBytes={estMetrics.totalBytes}
-          isExtracting={isExtracting}
-        />
-
-        {/* Workspace: Responsive Dual-Pane or Stack */}
-        <div className={`grid grid-cols-1 ${videoMetadata ? 'lg:grid-cols-12' : ''} gap-4 items-start`}>
-          {/* Left Column: Video Ingestion / Player */}
-          <div className={videoMetadata ? 'lg:col-span-6 flex flex-col gap-4' : 'w-full'}>
-            <VideoPlayerSection
-              metadata={videoMetadata}
-              onFileSelected={(file) => handleLoadVideo(file)}
-              onGenerateSynth={handleQuickSynth}
-              isSynthesizing={isSynthesizing}
-              startTime={startTime}
-              endTime={endTime}
-              onRangeChange={(start, end) => {
-                setStartTime(start);
-                setEndTime(end);
-              }}
-              onResetVideo={handleReset}
-              isExtracting={isExtracting}
-            />
-          </div>
-
-          {/* Right Column: Settings & Extract Action */}
-          <div className={videoMetadata ? 'lg:col-span-6 flex flex-col gap-4' : 'w-full'}>
-            <SettingsPanel
-              fps={fps}
-              onFpsChange={setFps}
-              format={format}
-              onFormatChange={setFormat}
-              quality={quality}
-              onQualityChange={setQuality}
-              scalePreset={scalePreset}
-              onScalePresetChange={setScalePreset}
-              customWidth={customWidth}
-              customHeight={customHeight}
-              onCustomDimensionsChange={(w, h) => {
-                setCustomWidth(w);
-                setCustomHeight(h);
-              }}
-              customNamePrefix={customNamePrefix}
-              onCustomNamePrefixChange={setCustomNamePrefix}
-              namingPattern={namingPattern}
-              onNamingPatternChange={setNamingPattern}
-              splitBatchSize={splitBatchSize}
-              onSplitBatchSizeChange={setSplitBatchSize}
-              includeManifest={includeManifest}
-              onIncludeManifestChange={setIncludeManifest}
-              totalEstimatedFrames={estMetrics.totalFrames}
+        {currentApp === 'bg-remover' ? (
+          /* AI Background Remover Feature */
+          <BgRemoverApp />
+        ) : (
+          /* Frame Forge Video Extraction Feature */
+          <>
+            {/* Minimalist System Telemetry Ribbon */}
+            <ResourceMonitor
+              telemetry={{ ...telemetry, inMemoryBlobBytes }}
+              framesCount={frames.length}
               estTotalBytes={estMetrics.totalBytes}
-              estPerFrameBytes={estMetrics.bytesPerFrame}
-              spaceSavingsPct={estMetrics.spaceSavingsPct}
-              targetWidth={targetDims.width}
-              targetHeight={targetDims.height}
-              videoName={videoMetadata?.name || ''}
               isExtracting={isExtracting}
-              onStartExtraction={handleStartExtraction}
-              hasVideo={!!videoMetadata}
             />
-          </div>
-        </div>
 
-        {/* Progress Display Bar (while extracting) */}
-        {isExtracting && (
-          <ProgressBar
-            progress={progress}
-            onCancel={handleCancelExtraction}
-            watchdogNudges={watchdogNudges}
-          />
+            {/* Workspace: Responsive Dual-Pane or Stack */}
+            <div className={`grid grid-cols-1 ${videoMetadata ? 'lg:grid-cols-12' : ''} gap-4 items-start`}>
+              {/* Left Column: Video Ingestion / Player */}
+              <div className={videoMetadata ? 'lg:col-span-6 flex flex-col gap-4' : 'w-full'}>
+                <VideoPlayerSection
+                  metadata={videoMetadata}
+                  onFileSelected={(file) => handleLoadVideo(file)}
+                  onGenerateSynth={handleQuickSynth}
+                  isSynthesizing={isSynthesizing}
+                  startTime={startTime}
+                  endTime={endTime}
+                  onRangeChange={(start, end) => {
+                    setStartTime(start);
+                    setEndTime(end);
+                  }}
+                  onResetVideo={handleReset}
+                  isExtracting={isExtracting}
+                />
+              </div>
+
+              {/* Right Column: Settings & Extract Action */}
+              <div className={videoMetadata ? 'lg:col-span-6 flex flex-col gap-4' : 'w-full'}>
+                <SettingsPanel
+                  fps={fps}
+                  onFpsChange={setFps}
+                  format={format}
+                  onFormatChange={setFormat}
+                  quality={quality}
+                  onQualityChange={setQuality}
+                  scalePreset={scalePreset}
+                  onScalePresetChange={setScalePreset}
+                  customWidth={customWidth}
+                  customHeight={customHeight}
+                  onCustomDimensionsChange={(w, h) => {
+                    setCustomWidth(w);
+                    setCustomHeight(h);
+                  }}
+                  customNamePrefix={customNamePrefix}
+                  onCustomNamePrefixChange={setCustomNamePrefix}
+                  namingPattern={namingPattern}
+                  onNamingPatternChange={setNamingPattern}
+                  splitBatchSize={splitBatchSize}
+                  onSplitBatchSizeChange={setSplitBatchSize}
+                  includeManifest={includeManifest}
+                  onIncludeManifestChange={setIncludeManifest}
+                  totalEstimatedFrames={estMetrics.totalFrames}
+                  estTotalBytes={estMetrics.totalBytes}
+                  estPerFrameBytes={estMetrics.bytesPerFrame}
+                  spaceSavingsPct={estMetrics.spaceSavingsPct}
+                  targetWidth={targetDims.width}
+                  targetHeight={targetDims.height}
+                  videoName={videoMetadata?.name || ''}
+                  isExtracting={isExtracting}
+                  onStartExtraction={handleStartExtraction}
+                  hasVideo={!!videoMetadata}
+                />
+              </div>
+            </div>
+
+            {/* Progress Display Bar (while extracting) */}
+            {isExtracting && (
+              <ProgressBar
+                progress={progress}
+                onCancel={handleCancelExtraction}
+                watchdogNudges={watchdogNudges}
+              />
+            )}
+
+            {/* Extracted Frame Gallery */}
+            <FramesGallery
+              frames={frames}
+              onToggleSelect={handleToggleSelect}
+              onSelectAll={handleSelectAll}
+              onDeselectAll={handleDeselectAll}
+              onDownloadFrame={handleDownloadSingleFrame}
+              onDownloadZip={handleDownloadZip}
+              onOpenLightbox={(idx) => setLightboxIndex(idx)}
+              isDownloadingZip={isDownloadingZip}
+              zipDownloadStatus={zipDownloadStatus}
+            />
+          </>
         )}
-
-        {/* Extracted Frame Gallery */}
-        <FramesGallery
-          frames={frames}
-          onToggleSelect={handleToggleSelect}
-          onSelectAll={handleSelectAll}
-          onDeselectAll={handleDeselectAll}
-          onDownloadFrame={handleDownloadSingleFrame}
-          onDownloadZip={handleDownloadZip}
-          onOpenLightbox={(idx) => setLightboxIndex(idx)}
-          isDownloadingZip={isDownloadingZip}
-          zipDownloadStatus={zipDownloadStatus}
-        />
       </main>
 
       {/* Lightbox Modal with Flipbook Animation */}
-      <LightboxModal
-        key={lightboxIndex ?? 'closed'}
-        frames={frames}
-        initialIndex={lightboxIndex}
-        onClose={() => setLightboxIndex(null)}
-        onDownloadFrame={handleDownloadSingleFrame}
-      />
+      {currentApp === 'frame-forge' && (
+        <LightboxModal
+          key={lightboxIndex ?? 'closed'}
+          frames={frames}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onDownloadFrame={handleDownloadSingleFrame}
+        />
+      )}
     </div>
   );
 }
