@@ -20,8 +20,24 @@ export async function removeBackgroundClient(
   // Dynamic import to prevent any SSR / Node execution issues
   const { removeBackground } = await import('@imgly/background-removal');
 
-  // Determine public asset path for local WebAssembly & Model weights
-  const assetPath = `${window.location.origin}/bg-removal-data/`;
+  // Determine public asset path for local WebAssembly & Model weights with CDN fallback
+  const cdnFallbackPath = 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/';
+  let assetPath = `${window.location.origin}/bg-removal-data/`;
+
+  try {
+    const probe = await fetch(`${window.location.origin}/bg-removal-data/resources.json`);
+    if (probe.ok) {
+      const data = await probe.json();
+      // Ensure the model exists in the resources manifest
+      if (!data['/models/isnet_fp16']) {
+        assetPath = cdnFallbackPath;
+      }
+    } else {
+      assetPath = cdnFallbackPath;
+    }
+  } catch {
+    assetPath = cdnFallbackPath;
+  }
 
   const config = {
     publicPath: assetPath,
@@ -57,11 +73,26 @@ export async function removeBackgroundClient(
     }
     return resultBlob;
   } catch (err: unknown) {
+    // If local asset had an issue, fallback to official CDN
+    if (config.publicPath !== cdnFallbackPath) {
+      try {
+        console.warn('Local asset execution failed, retrying with official CDN:', err);
+        const fallbackConfig = { ...config, publicPath: cdnFallbackPath };
+        const resultBlob = await removeBackground(imageSource, fallbackConfig);
+        if (onProgress) {
+          onProgress({ percent: 100, message: 'Complete' });
+        }
+        return resultBlob;
+      } catch (cdnErr) {
+        console.warn('CDN retry also failed:', cdnErr);
+      }
+    }
+
     // If GPU fails, fallback to CPU device
     if (config.device === 'gpu') {
       try {
         console.warn('WebGPU execution failed, falling back to WebAssembly CPU:', err);
-        const fallbackConfig = { ...config, device: 'cpu' as const };
+        const fallbackConfig = { ...config, device: 'cpu' as const, publicPath: cdnFallbackPath };
         const resultBlob = await removeBackground(imageSource, fallbackConfig);
         if (onProgress) {
           onProgress({ percent: 100, message: 'Complete' });
