@@ -30,15 +30,16 @@ async function main() {
     path.join(TARGET_DIR, 'resources.json'),
     JSON.stringify(resources, null, 2)
   );
-  console.log('✓ Updated resources.json with 1.7.0 models (including /models/isnet_fp16)');
+  console.log('✓ Updated resources.json with 1.7.0 models');
 
-  // 2. Identify required chunks for isnet_fp16 and wasm runtimes
+  // 2. Identify required chunks for isnet_fp16, isnet (FP32 best quality), and wasm runtimes
   const targets = [
     '/onnxruntime-web/ort-wasm-simd-threaded.jsep.wasm',
     '/onnxruntime-web/ort-wasm-simd-threaded.wasm',
     '/onnxruntime-web/ort-wasm-simd-threaded.jsep.mjs',
     '/onnxruntime-web/ort-wasm-simd-threaded.mjs',
     '/models/isnet_fp16',
+    '/models/isnet',
   ];
 
   const chunkNames = new Set();
@@ -50,13 +51,13 @@ async function main() {
     }
   }
 
-  console.log(`📥 Downloading ${chunkNames.size} chunks for offline isnet_fp16 model...`);
+  console.log(`📥 Downloading ${chunkNames.size} chunks for offline models...`);
 
   let count = 0;
   const chunkList = Array.from(chunkNames);
-  // Download in parallel batches of 5
-  for (let i = 0; i < chunkList.length; i += 5) {
-    const batch = chunkList.slice(i, i + 5);
+  // Download in parallel batches of 6
+  for (let i = 0; i < chunkList.length; i += 6) {
+    const batch = chunkList.slice(i, i + 6);
     await Promise.all(
       batch.map(async (name) => {
         const dest = path.join(TARGET_DIR, name);
@@ -67,7 +68,7 @@ async function main() {
     );
   }
 
-  console.log('\n✓ All 1.7.0 model assets downloaded successfully to public/bg-removal-data/');
+  console.log('\n✓ All model assets downloaded successfully to public/bg-removal-data/');
 }
 
 main().catch((err) => {

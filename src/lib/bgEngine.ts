@@ -5,17 +5,30 @@ export interface BgEngineProgress {
   message: string;
 }
 
+export type BgModelType = 'isnet' | 'isnet_fp16';
+
+export interface BgRemovalOptions {
+  model?: BgModelType; // 'isnet' (FP32 - Highest quality) or 'isnet_fp16'
+  feather?: number;    // Feather edge radius in pixels (default 2.5)
+}
+
 /**
  * Removes background from an image source (File, Blob, or URL)
  * entirely inside the user's browser using client-side WebAssembly / WebGPU.
+ * Uses ISNet (full FP32 precision) by default for best edge fidelity and applies
+ * anti-aliasing edge feathering.
  */
 export async function removeBackgroundClient(
   imageSource: Blob | File | string,
-  onProgress?: (progress: BgEngineProgress) => void
-): Promise<Blob> {
+  onProgress?: (progress: BgEngineProgress) => void,
+  options?: BgRemovalOptions
+): Promise<{ rawBlob: Blob; featheredBlob: Blob }> {
   if (typeof window === 'undefined') {
     throw new Error('Background removal engine must run client-side in the browser.');
   }
+
+  const selectedModel = options?.model || 'isnet'; // Default to ISNet full FP32
+  const featherRadius = options?.feather ?? 2.5;   // Default 2.5px smooth feathering
 
   // Dynamic import to prevent any SSR / Node execution issues
   const { removeBackground } = await import('@imgly/background-removal');
@@ -29,7 +42,8 @@ export async function removeBackgroundClient(
     if (probe.ok) {
       const data = await probe.json();
       // Ensure the model exists in the resources manifest
-      if (!data['/models/isnet_fp16']) {
+      const targetModelKey = `/models/${selectedModel}`;
+      if (!data[targetModelKey] && !data['/models/isnet_fp16']) {
         assetPath = cdnFallbackPath;
       }
     } else {
@@ -41,19 +55,20 @@ export async function removeBackgroundClient(
 
   const config = {
     publicPath: assetPath,
+    model: selectedModel,
     debug: false,
     device: ('gpu' in navigator ? 'gpu' : 'cpu') as 'gpu' | 'cpu',
     progress: (key: string, current: number, total: number) => {
       if (!onProgress) return;
-      
+
       const pct = total > 0 ? Math.min(99, Math.round((current / total) * 100)) : 0;
       const lowerKey = (key || '').toLowerCase();
 
       let message = 'Processing image...';
       if (lowerKey.includes('fetch') || lowerKey.includes('model') || lowerKey.includes('wasm') || lowerKey.includes('data')) {
-        message = `Downloading model: ${pct}%`;
+        message = `Downloading model (${selectedModel}): ${pct}%`;
       } else if (lowerKey.includes('compute') || lowerKey.includes('inference') || lowerKey.includes('session')) {
-        message = `Processing inference: ${pct}%`;
+        message = `Neural inference (${selectedModel}): ${pct}%`;
       } else {
         message = `Processing: ${pct}%`;
       }
@@ -66,44 +81,54 @@ export async function removeBackgroundClient(
     },
   };
 
+  let rawBlob: Blob;
+
   try {
-    const resultBlob = await removeBackground(imageSource, config);
-    if (onProgress) {
-      onProgress({ percent: 100, message: 'Complete' });
-    }
-    return resultBlob;
+    rawBlob = await removeBackground(imageSource, config);
   } catch (err: unknown) {
     // If local asset had an issue, fallback to official CDN
     if (config.publicPath !== cdnFallbackPath) {
       try {
         console.warn('Local asset execution failed, retrying with official CDN:', err);
         const fallbackConfig = { ...config, publicPath: cdnFallbackPath };
-        const resultBlob = await removeBackground(imageSource, fallbackConfig);
-        if (onProgress) {
-          onProgress({ percent: 100, message: 'Complete' });
-        }
-        return resultBlob;
+        rawBlob = await removeBackground(imageSource, fallbackConfig);
       } catch (cdnErr) {
         console.warn('CDN retry also failed:', cdnErr);
+        throw cdnErr;
       }
-    }
-
-    // If GPU fails, fallback to CPU device
-    if (config.device === 'gpu') {
+    } else if (config.device === 'gpu') {
+      // If GPU fails, fallback to CPU device
       try {
         console.warn('WebGPU execution failed, falling back to WebAssembly CPU:', err);
-        const fallbackConfig = { ...config, device: 'cpu' as const, publicPath: cdnFallbackPath };
-        const resultBlob = await removeBackground(imageSource, fallbackConfig);
-        if (onProgress) {
-          onProgress({ percent: 100, message: 'Complete' });
-        }
-        return resultBlob;
+        const fallbackConfig = { ...config, device: 'cpu' as const };
+        rawBlob = await removeBackground(imageSource, fallbackConfig);
       } catch (fallbackErr) {
         throw fallbackErr;
       }
+    } else {
+      throw err;
     }
-    throw err;
   }
+
+  // Apply edge feathering post-processing
+  let featheredBlob = rawBlob;
+  if (featherRadius > 0 && typeof imageSource !== 'string') {
+    try {
+      if (onProgress) {
+        onProgress({ percent: 99, message: 'Refining & feathering edges...' });
+      }
+      featheredBlob = await applyFeatherToResult(imageSource, rawBlob, featherRadius);
+    } catch (fErr) {
+      console.warn('Edge feathering fallback to raw blob:', fErr);
+      featheredBlob = rawBlob;
+    }
+  }
+
+  if (onProgress) {
+    onProgress({ percent: 100, message: 'Complete' });
+  }
+
+  return { rawBlob, featheredBlob };
 }
 
 /**
@@ -120,7 +145,7 @@ export function loadImageElement(source: Blob | string): Promise<HTMLImageElemen
       if (isBlob) URL.revokeObjectURL(url);
       resolve(img);
     };
-    img.onerror = (e) => {
+    img.onerror = () => {
       if (isBlob) URL.revokeObjectURL(url);
       reject(new Error('Failed to load image element'));
     };
@@ -156,6 +181,57 @@ export function extractAlphaMaskCanvas(transparentImg: HTMLImageElement): HTMLCa
 
   ctx.putImageData(imgData, 0, 0);
   return canvas;
+}
+
+/**
+ * Applies edge feathering (softening) to an alpha mask canvas.
+ * Uses hardware-accelerated CSS canvas blur filter.
+ */
+export function refineMaskEdges(
+  maskCanvas: HTMLCanvasElement,
+  featherRadius: number = 2.5
+): HTMLCanvasElement {
+  if (featherRadius <= 0) return maskCanvas;
+
+  const width = maskCanvas.width;
+  const height = maskCanvas.height;
+
+  const feathered = document.createElement('canvas');
+  feathered.width = width;
+  feathered.height = height;
+  const fCtx = feathered.getContext('2d', { willReadFrequently: true });
+  if (!fCtx) return maskCanvas;
+
+  // Apply smooth edge blur filter
+  fCtx.filter = `blur(${featherRadius}px)`;
+  fCtx.drawImage(maskCanvas, 0, 0);
+  fCtx.filter = 'none';
+
+  return feathered;
+}
+
+/**
+ * Re-applies edge feathering to an original image with raw cutout mask,
+ * returning a new transparent PNG Blob with smooth feathered boundaries.
+ */
+export async function applyFeatherToResult(
+  originalSource: Blob | File | HTMLImageElement,
+  cutoutSource: Blob | HTMLImageElement,
+  featherRadius: number = 2.5
+): Promise<Blob> {
+  const [origImg, cutoutImg] = await Promise.all([
+    originalSource instanceof HTMLImageElement ? originalSource : loadImageElement(originalSource),
+    cutoutSource instanceof HTMLImageElement ? cutoutSource : loadImageElement(cutoutSource),
+  ]);
+
+  // Extract raw mask
+  const rawMask = extractAlphaMaskCanvas(cutoutImg);
+
+  // Apply feather filter
+  const featheredMask = refineMaskEdges(rawMask, featherRadius);
+
+  // Composite with original color channels
+  return compositeImageWithMask(origImg, featheredMask);
 }
 
 /**
@@ -208,4 +284,3 @@ export async function compositeImageWithMask(
     );
   });
 }
-

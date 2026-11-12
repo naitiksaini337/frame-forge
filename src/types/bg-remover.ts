@@ -1,5 +1,7 @@
 export type ProcessingStatus = 'queued' | 'processing' | 'done' | 'error';
 
+export type BgModelType = 'isnet' | 'isnet_fp16';
+
 export interface QueueItem {
   id: string;
   file: File;
@@ -9,8 +11,10 @@ export interface QueueItem {
   status: ProcessingStatus;
   progress: number;
   progressText?: string;
+  rawProcessedBlob?: Blob;
   processedBlob?: Blob;
   processedUrl?: string;
+  featherRadius?: number;
   error?: string;
   originalDimensions?: { width: number; height: number };
 }
@@ -30,4 +34,3 @@ export interface SaveLocalResponse {
   verified?: boolean;
   directoryPath?: string;
 }
-

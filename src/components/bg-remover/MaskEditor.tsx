@@ -15,6 +15,7 @@ import {
   Sliders,
   Sun,
   Moon,
+  Wand2,
 } from 'lucide-react';
 import {
   loadImageElement,
@@ -226,6 +227,29 @@ export function MaskEditor({
     setCanUndo(undoStackRef.current.length > 1);
     setCanRedo(redoStackRef.current.length > 0);
   }, [renderDisplay]);
+
+  // Feather entire mask edges smoothly
+  const handleFeatherWholeMask = (amount: number = 2.5) => {
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas) return;
+    const ctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    const temp = document.createElement('canvas');
+    temp.width = maskCanvas.width;
+    temp.height = maskCanvas.height;
+    const tCtx = temp.getContext('2d');
+    if (!tCtx) return;
+
+    tCtx.filter = `blur(${amount}px)`;
+    tCtx.drawImage(maskCanvas, 0, 0);
+
+    ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    ctx.drawImage(temp, 0, 0);
+
+    pushHistoryState();
+    renderDisplay();
+  };
 
   // Hotkey listener
   useEffect(() => {
@@ -506,6 +530,17 @@ export function MaskEditor({
               <span>Soft (Feathered)</span>
               <span>Crisp Edge</span>
             </div>
+
+            {/* Quick Whole-Mask Feather Action */}
+            <button
+              type="button"
+              onClick={() => handleFeatherWholeMask(2.5)}
+              className="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/60 font-medium flex items-center justify-center gap-1.5 transition-colors"
+              title="Soften and feather all silhouette edges across the entire image"
+            >
+              <Wand2 className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Feather Entire Mask (+2.5px)</span>
+            </button>
           </div>
 
           {/* Undo / Redo & Zoom Controls */}

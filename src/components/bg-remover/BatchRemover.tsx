@@ -18,12 +18,14 @@ import {
   RefreshCw,
   Eye,
   CheckCheck,
+  Cpu,
+  Wand2,
 } from 'lucide-react';
 import { Dropzone } from './Dropzone';
 import { FolderPathInput } from './FolderPathInput';
 import { MaskEditor } from './MaskEditor';
 import { QueueItem, ProcessingStatus } from '../../types/bg-remover';
-import { removeBackgroundClient } from '../../lib/bgEngine';
+import { removeBackgroundClient, BgModelType } from '../../lib/bgEngine';
 import { sanitizeOutputFilename, formatBytes } from '../../lib/fileValidation';
 import { exportZip, downloadBlob, revokeObjectUrls } from '../../lib/zipUtils';
 
@@ -31,6 +33,10 @@ export function BatchRemover() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isProcessingQueue, setIsProcessingQueue] = useState<boolean>(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+
+  // Model & Feathering settings for batch queue
+  const [model, setModel] = useState<BgModelType>('isnet'); // Default FP32 Ultra Best Quality
+  const [featherRadius, setFeatherRadius] = useState<number>(3.0); // Default 3.0px edge feathering
 
   // Mask Touch-Up Editor modal
   const [touchUpItem, setTouchUpItem] = useState<QueueItem | null>(null);
@@ -119,17 +125,24 @@ export function BatchRemover() {
     // Process image strictly one at a time
     (async () => {
       try {
-        const resultBlob = await removeBackgroundClient(nextItem.file, (p) => {
-          setQueue((prev) =>
-            prev.map((item) =>
-              item.id === currentId
-                ? { ...item, progress: p.percent, progressText: p.message }
-                : item
-            )
-          );
-        });
+        const { rawBlob, featheredBlob } = await removeBackgroundClient(
+          nextItem.file,
+          (p) => {
+            setQueue((prev) =>
+              prev.map((item) =>
+                item.id === currentId
+                  ? { ...item, progress: p.percent, progressText: p.message }
+                  : item
+              )
+            );
+          },
+          {
+            model: model,
+            feather: featherRadius,
+          }
+        );
 
-        const procUrl = createTrackedUrl(resultBlob);
+        const procUrl = createTrackedUrl(featheredBlob);
 
         setQueue((prev) =>
           prev.map((item) =>
@@ -139,8 +152,10 @@ export function BatchRemover() {
                   status: 'done',
                   progress: 100,
                   progressText: 'Complete',
-                  processedBlob: resultBlob,
+                  rawProcessedBlob: rawBlob,
+                  processedBlob: featheredBlob,
                   processedUrl: procUrl,
+                  featherRadius: featherRadius,
                   error: undefined,
                 }
               : item
@@ -362,6 +377,72 @@ export function BatchRemover() {
 
   return (
     <div className="space-y-6">
+      {/* Batch Processing Settings Bar */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
+        {/* Model Selection */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <Cpu className="w-4 h-4 text-indigo-500" />
+            Neural Model:
+          </span>
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setModel('isnet')}
+              disabled={isWorking}
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                model === 'isnet'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="ISNet Ultra FP32: Highest edge precision"
+            >
+              <span>ISNet Ultra (FP32 Best Quality)</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                PRO
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setModel('isnet_fp16')}
+              disabled={isWorking}
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                model === 'isnet_fp16'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="ISNet Fast FP16: Balanced quality and memory footprint"
+            >
+              <span>ISNet Fast (FP16)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Edge Feathering Slider */}
+        <div className="flex items-center gap-3">
+          <span className="text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5">
+            <Wand2 className="w-4 h-4 text-indigo-500" />
+            Feather Edge:
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.5"
+              value={featherRadius}
+              onChange={(e) => setFeatherRadius(parseFloat(e.target.value))}
+              disabled={isWorking}
+              className="w-24 sm:w-32 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            />
+            <span className="px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60">
+              {featherRadius.toFixed(1)}px
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Dropzone for Multi-Files */}
       <Dropzone
         onFilesSelected={handleFilesSelected}
