@@ -1,22 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import {
   Sparkles,
   Layers,
   Image as ImageIcon,
-  Cpu,
-  ShieldCheck,
-  Zap,
 } from 'lucide-react';
 import { SingleRemover } from './SingleRemover';
 import { BatchRemover } from './BatchRemover';
 
+const emptySubscribe = () => () => {};
+const getWebGPUSnapshot = () => typeof navigator !== 'undefined' && 'gpu' in navigator;
+const getWebGPUServerSnapshot = () => false;
+
 export function BgRemoverApp() {
   const [activeTab, setActiveTab] = useState<'single' | 'batch'>('single');
-
-  // Check WebGPU capability
-  const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
+  const hasWebGPU = useSyncExternalStore(emptySubscribe, getWebGPUSnapshot, getWebGPUServerSnapshot);
 
   return (
     <div className="space-y-6">

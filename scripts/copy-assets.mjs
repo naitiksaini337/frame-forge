@@ -21,7 +21,7 @@ if (needsSync) {
   console.log('⚡ Synchronizing 1.7.0 background removal assets...');
   try {
     execSync('node scripts/download-models.mjs', { stdio: 'inherit' });
-  } catch (err) {
+  } catch {
     console.warn('⚠️ Could not download local models; app will automatically use CDN fallback.');
   }
 }

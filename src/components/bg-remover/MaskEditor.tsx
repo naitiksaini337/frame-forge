@@ -10,9 +10,7 @@ import {
   ZoomOut,
   Maximize2,
   Check,
-  X,
   Loader2,
-  Sliders,
   Sun,
   Moon,
   Wand2,
@@ -52,6 +50,9 @@ export function MaskEditor({
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Natural dimensions
+  const [naturalDims, setNaturalDims] = useState<{ width: number; height: number }>({ width: 800, height: 600 });
+
   // Undo / Redo state
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -84,7 +85,6 @@ export function MaskEditor({
     if (undoStackRef.current.length > 20) {
       undoStackRef.current.shift();
     }
-    // Clear redo stack on new action
     redoStackRef.current = [];
 
     setCanUndo(undoStackRef.current.length > 1);
@@ -123,18 +123,13 @@ export function MaskEditor({
     ctx.putImageData(imgData, 0, 0);
   }, []);
 
-  // Initialize images and canvases
+  // Initialize images and canvases asynchronously
   useEffect(() => {
     if (!isOpen) return;
 
     let mounted = true;
-    setIsLoading(true);
-    setError(null);
     undoStackRef.current = [];
     redoStackRef.current = [];
-    setCanUndo(false);
-    setCanRedo(false);
-    setZoom(1.0);
 
     const initCanvases = async () => {
       try {
@@ -148,6 +143,7 @@ export function MaskEditor({
         const w = origImg.naturalWidth || origImg.width;
         const h = origImg.naturalHeight || origImg.height;
 
+        setNaturalDims({ width: w, height: h });
         originalImgRef.current = origImg;
 
         // Create initial mask canvas from processed transparent image
@@ -256,7 +252,6 @@ export function MaskEditor({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Hotkeys '[' and ']' for brush size
       if (e.key === '[') {
         e.preventDefault();
         setBrushSize((s) => Math.max(4, s - 6));
@@ -286,51 +281,35 @@ export function MaskEditor({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleUndo, handleRedo, onClose]);
 
-  // Canvas drawing logic
-  const drawStamp = (x: number, y: number) => {
+  // Smooth continuous stroke rendering
+  const drawStrokeSegment = (fromX: number, fromY: number, toX: number, toY: number) => {
     const maskCanvas = maskCanvasRef.current;
     if (!maskCanvas) return;
     const ctx = maskCanvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
-    const radius = brushSize / 2;
-    const hardness = brushHardness / 100;
+    const isBrush = tool === 'brush';
+    const color = isBrush ? '#ffffff' : '#000000';
+    const softness = 1 - brushHardness / 100;
+    const blur = (brushSize / 2) * softness;
 
     ctx.save();
-    const isBrush = tool === 'brush';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, brushSize - blur);
+    ctx.strokeStyle = color;
 
-    // Create radial gradient for feathered edges
-    const grad = ctx.createRadialGradient(x, y, radius * hardness, x, y, radius);
-    if (isBrush) {
-      // Brush: Paint white (255 alpha)
-      grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = grad;
-    } else {
-      // Eraser: Paint black (0 alpha)
-      grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = grad;
+    if (blur > 0.5) {
+      ctx.shadowBlur = blur;
+      ctx.shadowColor = color;
     }
 
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+
     ctx.restore();
-  };
-
-  // Interpolate stamps along stroke path to prevent gaps during fast motion
-  const drawLine = (fromX: number, fromY: number, toX: number, toY: number) => {
-    const dist = Math.hypot(toX - fromX, toY - fromY);
-    const step = Math.max(1, (brushSize / 2) * 0.25);
-    const steps = Math.ceil(dist / step);
-
-    for (let i = 0; i <= steps; i++) {
-      const t = steps === 0 ? 0 : i / steps;
-      const x = fromX + (toX - fromX) * t;
-      const y = fromY + (toY - fromY) * t;
-      drawStamp(x, y);
-    }
   };
 
   // Convert client mouse coords to unscaled canvas coordinates
@@ -347,11 +326,11 @@ export function MaskEditor({
   };
 
   const handlePointerDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button !== 0) return; // Only primary mouse button
+    if (e.button !== 0) return;
     isDrawingRef.current = true;
     const coords = getCanvasCoords(e);
     lastPointRef.current = coords;
-    drawStamp(coords.x, coords.y);
+    drawStrokeSegment(coords.x, coords.y, coords.x + 0.1, coords.y + 0.1);
     renderDisplay();
   };
 
@@ -361,7 +340,7 @@ export function MaskEditor({
 
     if (!isDrawingRef.current || !lastPointRef.current) return;
 
-    drawLine(lastPointRef.current.x, lastPointRef.current.y, coords.x, coords.y);
+    drawStrokeSegment(lastPointRef.current.x, lastPointRef.current.y, coords.x, coords.y);
     lastPointRef.current = coords;
     renderDisplay();
   };
@@ -395,6 +374,15 @@ export function MaskEditor({
   };
 
   if (!isOpen) return null;
+
+  // Calculate scaled CSS display dimensions to enable clean scrolling
+  const maxDisplayW = 860;
+  const aspect = naturalDims.height / (naturalDims.width || 1);
+  const baseW = Math.min(maxDisplayW, naturalDims.width);
+  const baseH = baseW * aspect;
+
+  const displayWidth = baseW * zoom;
+  const displayHeight = baseH * zoom;
 
   return (
     <div
@@ -643,10 +631,10 @@ export function MaskEditor({
           </div>
         </div>
 
-        {/* Viewport Canvas Area */}
+        {/* Viewport Canvas Area with True Native Scroll/Pan */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 relative bg-slate-950"
+          className="flex-1 overflow-auto p-4 sm:p-8 relative bg-slate-950 flex items-center justify-center"
           onMouseEnter={() => setIsHoveringCanvas(true)}
           onMouseLeave={() => {
             setIsHoveringCanvas(false);
@@ -654,31 +642,33 @@ export function MaskEditor({
           }}
         >
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 m-auto">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
               <p className="text-xs">Loading image into touch-up canvas...</p>
             </div>
           ) : error ? (
-            <div className="text-rose-400 text-sm max-w-md text-center p-4 bg-rose-950/40 border border-rose-800 rounded-xl">
+            <div className="text-rose-400 text-sm max-w-md text-center p-4 bg-rose-950/40 border border-rose-800 rounded-xl m-auto">
               {error}
             </div>
           ) : (
             <div
-              className={`relative shadow-2xl rounded-lg overflow-hidden border border-slate-700/60 transition-transform ${
+              className={`relative shadow-2xl rounded-lg overflow-hidden border border-slate-700/60 m-auto ${
                 checkerTheme === 'dark'
                   ? 'bg-[linear-gradient(45deg,#1e2330_25%,transparent_25%),linear-gradient(-45deg,#1e2330_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1e2330_75%),linear-gradient(-45deg,transparent_75%,#1e2330_75%)] bg-[size:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0px] bg-[#121620]'
                   : 'bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] bg-[size:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0px] bg-white'
               }`}
               style={{
-                transform: `scale(${zoom})`,
-                transformOrigin: 'center center',
+                width: `${displayWidth}px`,
+                height: `${displayHeight}px`,
+                maxWidth: 'none',
+                maxHeight: 'none',
               }}
             >
               <canvas
                 ref={displayCanvasRef}
                 onMouseDown={handlePointerDown}
                 onMouseMove={handlePointerMove}
-                className="block cursor-none max-w-full max-h-[75vh] object-contain"
+                className="block cursor-none w-full h-full object-contain"
               />
             </div>
           )}
@@ -690,8 +680,8 @@ export function MaskEditor({
               style={{
                 left: `${cursorPos.x}px`,
                 top: `${cursorPos.y}px`,
-                width: `${brushSize * zoom}px`,
-                height: `${brushSize * zoom}px`,
+                width: `${brushSize * (displayWidth / (naturalDims.width || 1))}px`,
+                height: `${brushSize * (displayWidth / (naturalDims.width || 1))}px`,
                 borderColor: tool === 'brush' ? '#6366f1' : '#f43f5e',
                 boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.6)',
               }}
@@ -709,4 +699,3 @@ export function MaskEditor({
     </div>
   );
 }
-

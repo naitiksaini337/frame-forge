@@ -9,14 +9,17 @@ export type BgModelType = 'isnet' | 'isnet_fp16';
 
 export interface BgRemovalOptions {
   model?: BgModelType; // 'isnet' (FP32 - Highest quality) or 'isnet_fp16'
-  feather?: number;    // Feather edge radius in pixels (default 2.5)
+  feather?: number;    // Feather edge radius in pixels (default 3.0)
 }
 
 /**
  * Removes background from an image source (File, Blob, or URL)
  * entirely inside the user's browser using client-side WebAssembly / WebGPU.
- * Uses ISNet (full FP32 precision) by default for best edge fidelity and applies
- * anti-aliasing edge feathering.
+ * Uses a 4-tier resilient execution fallback:
+ *   1. Local WebGPU
+ *   2. Local WebAssembly CPU
+ *   3. CDN WebGPU
+ *   4. CDN WebAssembly CPU
  */
 export async function removeBackgroundClient(
   imageSource: Blob | File | string,
@@ -27,87 +30,94 @@ export async function removeBackgroundClient(
     throw new Error('Background removal engine must run client-side in the browser.');
   }
 
-  const selectedModel = options?.model || 'isnet'; // Default to ISNet full FP32
-  const featherRadius = options?.feather ?? 2.5;   // Default 2.5px smooth feathering
+  const selectedModel = options?.model || 'isnet';
+  const featherRadius = options?.feather ?? 3.0;
 
   // Dynamic import to prevent any SSR / Node execution issues
   const { removeBackground } = await import('@imgly/background-removal');
 
-  // Determine public asset path for local WebAssembly & Model weights with CDN fallback
-  const cdnFallbackPath = 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/';
-  let assetPath = `${window.location.origin}/bg-removal-data/`;
+  const cdnPath = 'https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/';
+  const localPath = `${window.location.origin}/bg-removal-data/`;
 
+  // Check if local public files are accessible
+  let hasLocalAssets = false;
   try {
-    const probe = await fetch(`${window.location.origin}/bg-removal-data/resources.json`);
+    const probe = await fetch(`${localPath}resources.json`);
     if (probe.ok) {
       const data = await probe.json();
-      // Ensure the model exists in the resources manifest
-      const targetModelKey = `/models/${selectedModel}`;
-      if (!data[targetModelKey] && !data['/models/isnet_fp16']) {
-        assetPath = cdnFallbackPath;
+      if (data[`/models/${selectedModel}`] || data['/models/isnet_fp16']) {
+        hasLocalAssets = true;
       }
-    } else {
-      assetPath = cdnFallbackPath;
     }
   } catch {
-    assetPath = cdnFallbackPath;
+    hasLocalAssets = false;
   }
 
-  const config = {
-    publicPath: assetPath,
-    model: selectedModel,
-    debug: false,
-    device: ('gpu' in navigator ? 'gpu' : 'cpu') as 'gpu' | 'cpu',
-    progress: (key: string, current: number, total: number) => {
-      if (!onProgress) return;
+  const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
 
-      const pct = total > 0 ? Math.min(99, Math.round((current / total) * 100)) : 0;
-      const lowerKey = (key || '').toLowerCase();
+  // Execution attempts in order of speed and independence
+  const attempts: Array<{ publicPath: string; device: 'gpu' | 'cpu'; label: string }> = [];
 
-      let message = 'Processing image...';
-      if (lowerKey.includes('fetch') || lowerKey.includes('model') || lowerKey.includes('wasm') || lowerKey.includes('data')) {
-        message = `Downloading model (${selectedModel}): ${pct}%`;
-      } else if (lowerKey.includes('compute') || lowerKey.includes('inference') || lowerKey.includes('session')) {
-        message = `Neural inference (${selectedModel}): ${pct}%`;
-      } else {
-        message = `Processing: ${pct}%`;
-      }
-
-      onProgress({ percent: pct, message });
-    },
-    output: {
-      format: 'image/png' as const,
-      quality: 1.0,
-    },
-  };
-
-  let rawBlob: Blob;
-
-  try {
-    rawBlob = await removeBackground(imageSource, config);
-  } catch (err: unknown) {
-    // If local asset had an issue, fallback to official CDN
-    if (config.publicPath !== cdnFallbackPath) {
-      try {
-        console.warn('Local asset execution failed, retrying with official CDN:', err);
-        const fallbackConfig = { ...config, publicPath: cdnFallbackPath };
-        rawBlob = await removeBackground(imageSource, fallbackConfig);
-      } catch (cdnErr) {
-        console.warn('CDN retry also failed:', cdnErr);
-        throw cdnErr;
-      }
-    } else if (config.device === 'gpu') {
-      // If GPU fails, fallback to CPU device
-      try {
-        console.warn('WebGPU execution failed, falling back to WebAssembly CPU:', err);
-        const fallbackConfig = { ...config, device: 'cpu' as const };
-        rawBlob = await removeBackground(imageSource, fallbackConfig);
-      } catch (fallbackErr) {
-        throw fallbackErr;
-      }
-    } else {
-      throw err;
+  if (hasLocalAssets) {
+    if (hasWebGPU) {
+      attempts.push({ publicPath: localPath, device: 'gpu', label: 'Local WebGPU' });
     }
+    attempts.push({ publicPath: localPath, device: 'cpu', label: 'Local CPU (WASM)' });
+  }
+
+  if (hasWebGPU) {
+    attempts.push({ publicPath: cdnPath, device: 'gpu', label: 'CDN WebGPU' });
+  }
+  attempts.push({ publicPath: cdnPath, device: 'cpu', label: 'CDN CPU (WASM)' });
+
+  let rawBlob: Blob | null = null;
+  let lastError: unknown = null;
+
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    try {
+      if (onProgress && i > 0) {
+        onProgress({ percent: 10, message: `Switching to ${attempt.label}...` });
+      }
+
+      const config = {
+        publicPath: attempt.publicPath,
+        model: selectedModel,
+        debug: false,
+        device: attempt.device,
+        progress: (key: string, current: number, total: number) => {
+          if (!onProgress) return;
+          const pct = total > 0 ? Math.min(98, Math.round((current / total) * 100)) : 0;
+          const lowerKey = (key || '').toLowerCase();
+
+          let message = 'Processing image...';
+          if (lowerKey.includes('fetch') || lowerKey.includes('model') || lowerKey.includes('wasm') || lowerKey.includes('data')) {
+            message = `Loading model (${selectedModel}): ${pct}%`;
+          } else if (lowerKey.includes('compute') || lowerKey.includes('inference') || lowerKey.includes('session')) {
+            message = `Inference (${attempt.device.toUpperCase()}): ${pct}%`;
+          } else {
+            message = `Processing: ${pct}%`;
+          }
+
+          onProgress({ percent: pct, message });
+        },
+        output: {
+          format: 'image/png' as const,
+          quality: 1.0,
+        },
+      };
+
+      rawBlob = await removeBackground(imageSource, config);
+      if (rawBlob) break;
+    } catch (err) {
+      console.warn(`${attempt.label} failed:`, err);
+      lastError = err;
+    }
+  }
+
+  if (!rawBlob) {
+    const errorMsg = lastError instanceof Error ? lastError.message : 'Unknown background removal error';
+    throw new Error(`Background removal failed across all engines: ${errorMsg}`);
   }
 
   // Apply edge feathering post-processing
@@ -236,7 +246,7 @@ export async function applyFeatherToResult(
 
 /**
  * Combines the original color image with an edited alpha mask canvas,
- * producing a transparent PNG Blob.
+ * producing a transparent PNG Blob. Handles dimension scaling automatically.
  */
 export async function compositeImageWithMask(
   originalImg: HTMLImageElement,
@@ -254,16 +264,25 @@ export async function compositeImageWithMask(
   // Step 1: Draw the original image RGB
   ctx.drawImage(originalImg, 0, 0);
 
-  // Step 2: Get original image data and mask image data
+  // Step 2: Ensure mask canvas matches original image dimensions
+  let alignedMaskCanvas = maskCanvas;
+  if (maskCanvas.width !== width || maskCanvas.height !== height) {
+    alignedMaskCanvas = document.createElement('canvas');
+    alignedMaskCanvas.width = width;
+    alignedMaskCanvas.height = height;
+    const alignedCtx = alignedMaskCanvas.getContext('2d');
+    alignedCtx?.drawImage(maskCanvas, 0, 0, width, height);
+  }
+
+  // Step 3: Get image data and apply mask as alpha
   const origData = ctx.getImageData(0, 0, width, height);
-  const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+  const maskCtx = alignedMaskCanvas.getContext('2d', { willReadFrequently: true });
   if (!maskCtx) throw new Error('Could not get mask canvas context');
   const maskData = maskCtx.getImageData(0, 0, width, height);
 
   const origPixels = origData.data;
   const maskPixels = maskData.data;
 
-  // Step 3: Apply mask's red channel (or brightness) as the new alpha channel
   for (let i = 0; i < origPixels.length; i += 4) {
     origPixels[i + 3] = maskPixels[i]; // Use R value of mask as alpha
   }

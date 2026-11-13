@@ -74,17 +74,17 @@ export default function FrameForgePage() {
   const [zipDownloadStatus, setZipDownloadStatus] = useState('');
 
   // Hardware Telemetry State
-  const [telemetry, setTelemetry] = useState<HardwareTelemetry>(() => ({
+  const [telemetry, setTelemetry] = useState<HardwareTelemetry>({
     ramUsedBytes: 0,
     ramTotalBytes: 0,
     inMemoryBlobBytes: 0,
-    cpuCores: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8,
+    cpuCores: 8,
     loopLatencyMs: 16.6,
     decodeFps: 0,
     diskUsedBytes: 0,
     diskTotalBytes: 0,
-    gpuRenderer: detectGpuRenderer(),
-  }));
+    gpuRenderer: 'Direct3D11 / Metal',
+  });
 
   // Offscreen Video & Canvas DOM references
   const offscreenVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -122,6 +122,15 @@ export default function FrameForgePage() {
 
   // Hardware Profiler loop
   useEffect(() => {
+    // Detect client hardware concurrency and GPU asynchronously after mount
+    const rId = requestAnimationFrame(() => {
+      setTelemetry((prev) => ({
+        ...prev,
+        cpuCores: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8,
+        gpuRenderer: detectGpuRenderer(),
+      }));
+    });
+
     let lastTime = performance.now();
     let animId: number;
 
@@ -171,6 +180,7 @@ export default function FrameForgePage() {
     }, 2000);
 
     return () => {
+      cancelAnimationFrame(rId);
       cancelAnimationFrame(animId);
       clearInterval(statsTimer);
     };

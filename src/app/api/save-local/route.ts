@@ -24,12 +24,20 @@ export async function POST(req: NextRequest) {
       }
     } else {
       // JSON payload
-      const body = await req.json();
-      directoryPath = body.directoryPath || '';
-      filename = body.filename || '';
-      verifyOnly = !!body.verifyOnly;
+      let body: Record<string, unknown>;
+      try {
+        body = await req.json();
+      } catch {
+        return NextResponse.json(
+          { success: false, error: 'Malformed JSON payload.' },
+          { status: 400 }
+        );
+      }
+      directoryPath = typeof body.directoryPath === 'string' ? body.directoryPath : '';
+      filename = typeof body.filename === 'string' ? body.filename : '';
+      verifyOnly = Boolean(body.verifyOnly);
 
-      if (body.fileBase64) {
+      if (typeof body.fileBase64 === 'string') {
         // Strip data:image/...;base64, prefix if present
         const base64Clean = body.fileBase64.replace(/^data:image\/\w+;base64,/, '');
         fileBuffer = Buffer.from(base64Clean, 'base64');

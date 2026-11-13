@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Download,
   FolderDown,
@@ -10,11 +10,8 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Eye,
-  SlidersHorizontal,
   Moon,
   Sun,
-  Layers,
   Wand2,
   Cpu,
 } from 'lucide-react';
@@ -68,11 +65,15 @@ export function SingleRemover() {
 
   // Active object URLs tracking for cleanup
   const activeUrlsRef = useRef<string[]>([]);
+  const featherTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Cleanup object URLs on unmount
+  // Cleanup object URLs and timers on unmount
   useEffect(() => {
     return () => {
       revokeObjectUrls(activeUrlsRef.current);
+      if (featherTimerRef.current) {
+        clearTimeout(featherTimerRef.current);
+      }
     };
   }, []);
 
@@ -136,25 +137,31 @@ export function SingleRemover() {
     }
   };
 
-  // Instant real-time edge feather adjustment
-  const handleFeatherChange = async (newRadius: number) => {
+  // Debounced real-time edge feather adjustment
+  const handleFeatherChange = (newRadius: number) => {
     setFeatherRadius(newRadius);
     if (!selectedFile || !rawBlob) return;
 
-    setIsFeathering(true);
-    try {
-      const newBlob = await applyFeatherToResult(selectedFile, rawBlob, newRadius);
-      if (processedUrl) {
-        URL.revokeObjectURL(processedUrl);
-      }
-      const newUrl = createTrackedUrl(newBlob);
-      setProcessedBlob(newBlob);
-      setProcessedUrl(newUrl);
-    } catch (err) {
-      console.warn('Failed to update edge feathering:', err);
-    } finally {
-      setIsFeathering(false);
+    if (featherTimerRef.current) {
+      clearTimeout(featherTimerRef.current);
     }
+
+    setIsFeathering(true);
+    featherTimerRef.current = setTimeout(async () => {
+      try {
+        const newBlob = await applyFeatherToResult(selectedFile, rawBlob, newRadius);
+        if (processedUrl) {
+          URL.revokeObjectURL(processedUrl);
+        }
+        const newUrl = createTrackedUrl(newBlob);
+        setProcessedBlob(newBlob);
+        setProcessedUrl(newUrl);
+      } catch (err) {
+        console.warn('Failed to update edge feathering:', err);
+      } finally {
+        setIsFeathering(false);
+      }
+    }, 60);
   };
 
   const handleDownload = () => {
@@ -547,6 +554,7 @@ export function SingleRemover() {
                   </div>
                   <div className="flex-1 p-4 flex items-center justify-center bg-slate-100/50 dark:bg-slate-950/40 min-h-[300px]">
                     {originalUrl && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={originalUrl}
                         alt="Original"
@@ -574,6 +582,7 @@ export function SingleRemover() {
                         : 'bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] bg-[size:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0px] bg-white'
                     }`}
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={processedUrl}
                       alt="Processed with feathered transparent background"

@@ -2,41 +2,38 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Sparkles,
   Download,
   FolderDown,
   Paintbrush,
-  RotateCcw,
   Trash2,
   AlertCircle,
   CheckCircle2,
   Clock,
   Loader2,
   Archive,
-  Play,
-  Pause,
   RefreshCw,
-  Eye,
   CheckCheck,
   Cpu,
   Wand2,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { Dropzone } from './Dropzone';
 import { FolderPathInput } from './FolderPathInput';
 import { MaskEditor } from './MaskEditor';
-import { QueueItem, ProcessingStatus } from '../../types/bg-remover';
+import { QueueItem } from '../../types/bg-remover';
 import { removeBackgroundClient, BgModelType } from '../../lib/bgEngine';
 import { sanitizeOutputFilename, formatBytes } from '../../lib/fileValidation';
-import { exportZip, downloadBlob, revokeObjectUrls } from '../../lib/zipUtils';
+import { exportZip, downloadBlob } from '../../lib/zipUtils';
 
 export function BatchRemover() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [isProcessingQueue, setIsProcessingQueue] = useState<boolean>(false);
+  const [isQueueActive, setIsQueueActive] = useState<boolean>(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
 
   // Model & Feathering settings for batch queue
-  const [model, setModel] = useState<BgModelType>('isnet'); // Default FP32 Ultra Best Quality
-  const [featherRadius, setFeatherRadius] = useState<number>(3.0); // Default 3.0px edge feathering
+  const [model, setModel] = useState<BgModelType>('isnet');
+  const [featherRadius, setFeatherRadius] = useState<number>(3.0);
 
   // Mask Touch-Up Editor modal
   const [touchUpItem, setTouchUpItem] = useState<QueueItem | null>(null);
@@ -51,6 +48,27 @@ export function BatchRemover() {
 
   // Track created object URLs for memory safety
   const trackedUrlsRef = useRef<Set<string>>(new Set());
+  const queueRef = useRef<QueueItem[]>(queue);
+  const isQueueActiveRef = useRef<boolean>(isQueueActive);
+  const modelRef = useRef<BgModelType>(model);
+  const featherRadiusRef = useRef<number>(featherRadius);
+  const isWorkerBusyRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    isQueueActiveRef.current = isQueueActive;
+  }, [isQueueActive]);
+
+  useEffect(() => {
+    modelRef.current = model;
+  }, [model]);
+
+  useEffect(() => {
+    featherRadiusRef.current = featherRadius;
+  }, [featherRadius]);
 
   const createTrackedUrl = useCallback((blob: Blob): string => {
     const url = URL.createObjectURL(blob);
@@ -69,15 +87,119 @@ export function BatchRemover() {
 
   // Cleanup all tracked URLs on component unmount
   useEffect(() => {
+    const urls = trackedUrlsRef.current;
     return () => {
-      trackedUrlsRef.current.forEach((url) => {
+      urls.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
         } catch {}
       });
-      trackedUrlsRef.current.clear();
+      urls.clear();
     };
   }, []);
+
+  // Worker loop that processes items sequentially
+  const processNextItemRef = useRef<() => Promise<void>>(async () => {});
+
+  const processNextItem = useCallback(async () => {
+    if (!isQueueActiveRef.current || isWorkerBusyRef.current) return;
+
+    const nextItem = queueRef.current.find((item) => item.status === 'queued');
+    if (!nextItem) {
+      setIsQueueActive(false);
+      setActiveItemId(null);
+      return;
+    }
+
+    isWorkerBusyRef.current = true;
+    const currentId = nextItem.id;
+    setActiveItemId(currentId);
+
+    // Update status to processing
+    setQueue((prev) =>
+      prev.map((item) =>
+        item.id === currentId
+          ? { ...item, status: 'processing', progress: 5, progressText: 'Preparing...' }
+          : item
+      )
+    );
+
+    try {
+      const { rawBlob, featheredBlob } = await removeBackgroundClient(
+        nextItem.file,
+        (p) => {
+          setQueue((prev) =>
+            prev.map((item) =>
+              item.id === currentId
+                ? { ...item, progress: p.percent, progressText: p.message }
+                : item
+            )
+          );
+        },
+        {
+          model: modelRef.current,
+          feather: featherRadiusRef.current,
+        }
+      );
+
+      const procUrl = createTrackedUrl(featheredBlob);
+
+      setQueue((prev) =>
+        prev.map((item) =>
+          item.id === currentId
+            ? {
+                ...item,
+                status: 'done',
+                progress: 100,
+                progressText: 'Complete',
+                rawProcessedBlob: rawBlob,
+                processedBlob: featheredBlob,
+                processedUrl: procUrl,
+                featherRadius: featherRadiusRef.current,
+                error: undefined,
+              }
+            : item
+        )
+      );
+    } catch (err: unknown) {
+      console.error(`Batch processing failed for ${nextItem.name}:`, err);
+      const errorMsg =
+        err instanceof Error ? err.message : 'Processing failed (WASM/WebGL error).';
+      setQueue((prev) =>
+        prev.map((item) =>
+          item.id === currentId
+            ? {
+                ...item,
+                status: 'error',
+                progress: 0,
+                progressText: 'Failed',
+                error: errorMsg,
+              }
+            : item
+        )
+      );
+    } finally {
+      isWorkerBusyRef.current = false;
+      setActiveItemId(null);
+      // Trigger next item asynchronously
+      if (isQueueActiveRef.current) {
+        setTimeout(() => {
+          processNextItemRef.current();
+        }, 100);
+      }
+    }
+  }, [createTrackedUrl]);
+
+  useEffect(() => {
+    processNextItemRef.current = processNextItem;
+  }, [processNextItem]);
+
+  // When queue becomes active, trigger the worker loop
+  useEffect(() => {
+    if (isQueueActive && !isWorkerBusyRef.current) {
+      processNextItem();
+    }
+  }, [isQueueActive, processNextItem]);
 
   // Append new files to the queue
   const handleFilesSelected = (files: File[]) => {
@@ -95,94 +217,13 @@ export function BatchRemover() {
     });
 
     setQueue((prev) => [...prev, ...newItems]);
-    setIsProcessingQueue(true);
+    setIsQueueActive(true);
   };
 
-  // Strict Sequential Queue Runner (concurrency = 1)
-  useEffect(() => {
-    if (!isProcessingQueue || activeItemId) return;
-
-    // Find first queued item
-    const nextItem = queue.find((item) => item.status === 'queued');
-    if (!nextItem) {
-      // All items in queue have been processed or errored
-      setIsProcessingQueue(false);
-      return;
-    }
-
-    const currentId = nextItem.id;
-    setActiveItemId(currentId);
-
-    // Mark as processing
-    setQueue((prev) =>
-      prev.map((item) =>
-        item.id === currentId
-          ? { ...item, status: 'processing', progress: 5, progressText: 'Preparing...' }
-          : item
-      )
-    );
-
-    // Process image strictly one at a time
-    (async () => {
-      try {
-        const { rawBlob, featheredBlob } = await removeBackgroundClient(
-          nextItem.file,
-          (p) => {
-            setQueue((prev) =>
-              prev.map((item) =>
-                item.id === currentId
-                  ? { ...item, progress: p.percent, progressText: p.message }
-                  : item
-              )
-            );
-          },
-          {
-            model: model,
-            feather: featherRadius,
-          }
-        );
-
-        const procUrl = createTrackedUrl(featheredBlob);
-
-        setQueue((prev) =>
-          prev.map((item) =>
-            item.id === currentId
-              ? {
-                  ...item,
-                  status: 'done',
-                  progress: 100,
-                  progressText: 'Complete',
-                  rawProcessedBlob: rawBlob,
-                  processedBlob: featheredBlob,
-                  processedUrl: procUrl,
-                  featherRadius: featherRadius,
-                  error: undefined,
-                }
-              : item
-          )
-        );
-      } catch (err: unknown) {
-        console.error(`Batch processing failed for ${nextItem.name}:`, err);
-        const errorMsg =
-          err instanceof Error ? err.message : 'Processing failed (WASM/WebGL error).';
-        setQueue((prev) =>
-          prev.map((item) =>
-            item.id === currentId
-              ? {
-                  ...item,
-                  status: 'error',
-                  progress: 0,
-                  progressText: 'Failed',
-                  error: errorMsg,
-                }
-              : item
-          )
-        );
-      } finally {
-        setActiveItemId(null);
-      }
-    })();
-  }, [queue, isProcessingQueue, activeItemId, createTrackedUrl]);
+  // Pause / Resume queue
+  const handleToggleQueue = () => {
+    setIsQueueActive((prev) => !prev);
+  };
 
   // Retry a single failed item
   const handleRetryItem = (id: string) => {
@@ -199,7 +240,7 @@ export function BatchRemover() {
           : item
       )
     );
-    setIsProcessingQueue(true);
+    setIsQueueActive(true);
   };
 
   // Retry All Failed items
@@ -217,7 +258,7 @@ export function BatchRemover() {
           : item
       )
     );
-    setIsProcessingQueue(true);
+    setIsQueueActive(true);
   };
 
   // Remove a single item from the queue
@@ -250,7 +291,8 @@ export function BatchRemover() {
 
   // Clear all items in queue
   const handleClearAll = () => {
-    setIsProcessingQueue(false);
+    setIsQueueActive(false);
+    isWorkerBusyRef.current = false;
     setActiveItemId(null);
     for (const item of queue) {
       revokeTrackedUrl(item.thumbnailUrl);
@@ -330,7 +372,7 @@ export function BatchRemover() {
         } else {
           failedCount++;
         }
-      } catch (err) {
+      } catch {
         failedCount++;
       }
     }
@@ -373,7 +415,7 @@ export function BatchRemover() {
   const doneCount = queue.filter((i) => i.status === 'done').length;
   const queuedCount = queue.filter((i) => i.status === 'queued').length;
   const errorCount = queue.filter((i) => i.status === 'error').length;
-  const isWorking = activeItemId !== null || isProcessingQueue;
+  const isWorking = activeItemId !== null || isQueueActive;
 
   return (
     <div className="space-y-6">
@@ -481,6 +523,26 @@ export function BatchRemover() {
 
             {/* Global Queue Controls */}
             <div className="flex flex-wrap items-center gap-2">
+              {queuedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleToggleQueue}
+                  className="px-3 py-1.5 font-medium rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 transition-colors flex items-center gap-1.5"
+                >
+                  {isQueueActive ? (
+                    <>
+                      <Pause className="w-3.5 h-3.5" />
+                      <span>Pause Queue</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5" />
+                      <span>Resume Queue</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               {errorCount > 0 && (
                 <button
                   type="button"
@@ -558,6 +620,7 @@ export function BatchRemover() {
                   {/* Left: Thumbnail & Filename */}
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0 border border-slate-200 dark:border-slate-700 relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={isItemDone && item.processedUrl ? item.processedUrl : item.thumbnailUrl}
                         alt={item.name}
@@ -767,4 +830,3 @@ export function BatchRemover() {
     </div>
   );
 }
-
